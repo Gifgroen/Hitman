@@ -2,16 +2,15 @@
 #include <dlfcn.h>
 #include <SDL2/SDL.h>
 
+#include "hitman.h"
+
 #define global static
 #define internal static
 #define local_persist static
 
 global bool Running = true;
 
-#define SCREEN_WIDTH 1280
-#define SCREEN_HEIGHT 1024
-
-global SDL_Window *gWindow = NULL;
+global SDL_Window *Window = NULL;
 
 int main(int argc, char *argv[]) 
 {
@@ -26,7 +25,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    typedef void (*GameUpdateAndRender_t)();
+    typedef void (*GameUpdateAndRender_t)(back_buffer*);
 
     // reset dl errors
     dlerror();
@@ -49,7 +48,24 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    gWindow = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    back_buffer Buffer = {};
+    buffer_dimensions Dimensions = {};
+    Dimensions.Width = 1280;
+    Dimensions.Height = 1024;
+    Buffer.Dimensions = Dimensions;
+
+    int32_t Pixels[Dimensions.Height][Dimensions.Width];
+
+    Buffer.Pixels = Pixels;
+    Buffer.BytesPerPixel = sizeof(int32_t);
+
+
+    Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, SDL_WINDOW_SHOWN);
+
+    SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_TARGETTEXTURE);
+
+
+    SDL_Texture *Texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Dimensions.Width, Dimensions.Height);
 
     SDL_Event e;
 
@@ -63,7 +79,11 @@ int main(int argc, char *argv[])
             }
         }
 
-        GameUpdateAndRender();
+        GameUpdateAndRender(&Buffer);
+
+        SDL_UpdateTexture(Texture, 0, Buffer.Pixels, Buffer.Dimensions.Width * Buffer.BytesPerPixel);
+        SDL_RenderCopy(Renderer, Texture, 0, 0);
+        SDL_RenderPresent(Renderer);
     }
 
     // ENDREGION - Platform using SDL
@@ -71,9 +91,9 @@ int main(int argc, char *argv[])
     printf("Closing library\n");
     dlclose(handle);
 
-	SDL_DestroyWindow(gWindow);
-	gWindow = NULL;
-
+    printf("Quiting SDL\n");
+	SDL_DestroyWindow(Window);
+	Window = NULL;
 	SDL_Quit();
  
     return 0;
