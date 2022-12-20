@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
+#include "hitman.h"
 
 #define global static
 #define internal static
@@ -18,11 +19,11 @@ int main(int argc, char *argv[])
 
     if(SDL_Init(SDL_INIT_VIDEO)) 
     {
-        printf("Cannot init video\n");
+        printf("Failed initialising subsystems! %s\n", SDL_GetError());
         return 1;
     }
 
-    gWindow = SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    gWindow = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
     SDL_Event e;
 
@@ -35,6 +36,8 @@ int main(int argc, char *argv[])
                 Running = false;
             }
         }
+
+        GameUpdateAndRender();
     }
 
 	SDL_DestroyWindow(gWindow);
