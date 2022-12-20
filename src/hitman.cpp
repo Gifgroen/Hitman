@@ -1,6 +1,6 @@
 #include "hitman.h"
 
-void GameUpdateAndRender() {
+extern "C" void GameUpdateAndRender() {
     printf("Game update and render!\n");
     
 }

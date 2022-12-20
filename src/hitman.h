@@ -3,6 +3,4 @@
 
 #include <stdio.h>
 
-void GameUpdateAndRender();
-
 #endif
