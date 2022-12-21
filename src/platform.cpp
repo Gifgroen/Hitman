@@ -59,13 +59,9 @@ int main(int argc, char *argv[])
     Buffer.Pixels = Pixels;
     Buffer.BytesPerPixel = sizeof(int32_t);
 
-
-    Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, SDL_WINDOW_SHOWN);
-
+    Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_TARGETTEXTURE);
-
-
-    SDL_Texture *Texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Dimensions.Width, Dimensions.Height);
+    SDL_Texture *WindowTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Dimensions.Width, Dimensions.Height);
 
     SDL_Event e;
 
@@ -77,12 +73,32 @@ int main(int argc, char *argv[])
             {
                 Running = false;
             }
+            else if(e.type == SDL_WINDOWEVENT)
+            {       
+                switch(e.window.event)
+                {
+                    case SDL_WINDOWEVENT_SIZE_CHANGED: {
+                        int NewWidth = e.window.data1;
+                        int NewHeight = e.window.data2;
+                        printf("New Dim = (%d, %d)\n", NewWidth, NewHeight);
+                        // TODO: Resize the offscreen_buffer, WindowTexture, etc.
+                    } break;
+
+                    case SDL_WINDOWEVENT_EXPOSED: {
+                        printf("EXPOSED!\n");
+                    } break;
+
+                    default: {
+                        printf("type = %d\n", e.window.type);
+                    }
+                }
+            }
         }
 
         GameUpdateAndRender(&Buffer);
 
-        SDL_UpdateTexture(Texture, 0, Buffer.Pixels, Buffer.Dimensions.Width * Buffer.BytesPerPixel);
-        SDL_RenderCopy(Renderer, Texture, 0, 0);
+        SDL_UpdateTexture(WindowTexture, 0, Buffer.Pixels, Buffer.Dimensions.Width * Buffer.BytesPerPixel);
+        SDL_RenderCopy(Renderer, WindowTexture, 0, 0);
         SDL_RenderPresent(Renderer);
     }
 
@@ -92,6 +108,8 @@ int main(int argc, char *argv[])
     dlclose(handle);
 
     printf("Quiting SDL\n");
+    SDL_DestroyTexture(WindowTexture);
+    SDL_DestroyRenderer(Renderer);
 	SDL_DestroyWindow(Window);
 	Window = NULL;
 	SDL_Quit();
