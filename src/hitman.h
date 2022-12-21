@@ -3,13 +3,13 @@
 
 #include <stdio.h>
 
-struct buffer_dimensions {
+struct window_dimensions {
     int Width;
     int Height;
 };
 
-struct back_buffer {
-    buffer_dimensions Dimensions;
+struct offscreen_buffer {
+    window_dimensions Dimensions;
     void *Pixels;
     int BytesPerPixel;
 };

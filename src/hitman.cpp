@@ -1,8 +1,8 @@
 #include "hitman.h"
 
-extern "C" void GameUpdateAndRender(back_buffer *Buffer) 
+extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer) 
 {
-    buffer_dimensions Dim = Buffer->Dimensions;
+    window_dimensions Dim = Buffer->Dimensions;
 
     int Pitch = Dim.Width * Buffer->BytesPerPixel;
 
