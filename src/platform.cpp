@@ -78,7 +78,7 @@ internal float GetSecondsElapsed(u_int64_t OldCounter, u_int64_t CurrentCounter)
 
 int main(int argc, char *argv[]) 
 {
-    printf("Running Hitman!\n");
+    printf("Running Hitman! HITMAN_DEBUG = %d\n", HITMAN_DEBUG);
 
     // REGION - Load Game Library code!
     printf("Opening libhitman.so...\n");
@@ -110,15 +110,17 @@ int main(int argc, char *argv[])
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
         return 1;
     }
-
+    
+#if HITMAN_DEBUG
     u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
+#endif
 
     int WindowWidth = 1280;
     int WindowHeight = 1024;
     u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WindowWidth, WindowHeight, WindowFlags);
 
-    SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 
     printf("Device refresh rate is %d Hz\n", GetWindowRefreshRate(Window));
     int GameUpdateHz = 30;
@@ -134,10 +136,13 @@ int main(int argc, char *argv[])
     
     // ENDREGION: setup offscreen buffer
 
-    SDL_Event e;
+    u_int64_t LastCounter = SDL_GetPerformanceCounter(); 
 
-    u_int64_t LastCounter = SDL_GetPerformanceCounter();
+#if HITMAN_DEBUG
     u_int64_t LastCycleCount = _rdtsc();
+#endif
+
+    SDL_Event e;
 
     while(Running) 
     {
@@ -188,11 +193,14 @@ int main(int argc, char *argv[])
             }
         }
 
+#if HITMAN_DEBUG
         // Get this before UpdateWindow() so that we don't keep missing VBlanks.
         u_int64_t EndCounter = SDL_GetPerformanceCounter();
+#endif
 
         UpdateWindow(WindowTexture, &Buffer,  Renderer);
-        
+
+#if HITMAN_DEBUG 
         // Calculate frame timings.
         u_int64_t EndCycleCount = _rdtsc();
         u_int64_t CounterElapsed = EndCounter - LastCounter;
@@ -206,6 +214,9 @@ int main(int argc, char *argv[])
 
         LastCycleCount = EndCycleCount;
         LastCounter = EndCounter;
+    
+        // ENDREGION: Time our frame duration
+    #endif
     }
 
     // ENDREGION - Platform using SDL
