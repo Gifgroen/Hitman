@@ -13,6 +13,10 @@
 
 #define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
 
+#define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
+
+global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
+
 global SDL_Window *Window = NULL;
 global SDL_Texture *WindowTexture = NULL;
 
@@ -78,10 +82,14 @@ internal float GetSecondsElapsed(u_int64_t OldCounter, u_int64_t CurrentCounter)
 
 int main(int argc, char *argv[]) 
 {
-    printf("Running Hitman! HITMAN_DEBUG = %d\n", HITMAN_DEBUG);
+#if HITMAN_DEBUG
+    printf("Running Hitman in DEBUG mode!\n");
+#endif
 
     // REGION - Load Game Library code!
+#if HITMAN_DEBUG
     printf("Opening libhitman.so...\n");
+#endif
     void* Handle = dlopen("../build/libhitman.so", RTLD_LAZY);
     if (!Handle) 
     {
@@ -100,12 +108,16 @@ int main(int argc, char *argv[])
         dlclose(Handle);
         return 1;
     }
+
+#if HITMAN_DEBUG
     printf("Loaded Game service from libhitman!\n");
+#endif 
 
     // ENDREGION - Load Game Library code!
 
     // REGION - Platform using SDL
-    if(SDL_Init(SDL_INIT_VIDEO)) 
+    u_int32_t SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+    if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
         return 1;
@@ -115,6 +127,23 @@ int main(int argc, char *argv[])
     u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
+    for (int i = 0; i < SDL_NumJoysticks(); ++i)
+    {
+        int ControllerIndex = i + 1;
+        printf("ControllerIndex = %d, Count = %lu\n", ControllerIndex, ArrayCount(ControllerHandles));
+
+        if (ControllerIndex == ArrayCount(ControllerHandles)) {
+            break;
+        }
+        if (!SDL_IsGameController(i)) 
+        { 
+            continue; 
+        }
+
+        ControllerHandles[ControllerIndex] = SDL_GameControllerOpen(i);
+        printf("Connected %s\n", SDL_GameControllerNameForIndex(i));
+    }
+
     int WindowWidth = 1280;
     int WindowHeight = 1024;
     u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
@@ -122,9 +151,13 @@ int main(int argc, char *argv[])
 
     SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 
-    printf("Device refresh rate is %d Hz\n", GetWindowRefreshRate(Window));
     int GameUpdateHz = 30;
     double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
+
+    if (GetWindowRefreshRate(Window) !=  GameUpdateHz) 
+    {
+        printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", GetWindowRefreshRate(Window), GameUpdateHz);
+    }
 
     // REGION: setup offscreen buffer
 
@@ -169,8 +202,10 @@ int main(int argc, char *argv[])
                     } break;
 
                     default: {
+#if HITMAN_DEBUG
                         printf("WINDOWEVENT: type = %d\n", e.window.type);
-                    }
+#endif
+                    } break;
                 }
             }
         }
@@ -242,6 +277,13 @@ int main(int argc, char *argv[])
     {
         SDL_DestroyWindow(Window);
 	    Window = NULL;
+    }
+    for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    {
+        if (ControllerHandles[i]) {
+            printf("Closing %s\n", SDL_GameControllerName(ControllerHandles[i]));
+            SDL_GameControllerClose(ControllerHandles[i]);
+        }
     }
 
 	SDL_Quit();

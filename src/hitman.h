@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+#define MAX_CONTROLLER_COUNT 5
+
 struct window_dimensions {
     int Width;
     int Height;
