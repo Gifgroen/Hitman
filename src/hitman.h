@@ -5,31 +5,35 @@
 
 #define MAX_CONTROLLER_COUNT 5
 
-struct window_dimensions {
+struct window_dimensions 
+{
     int Width;
     int Height;
 };
 
-struct offscreen_buffer {
+struct offscreen_buffer 
+{
     window_dimensions Dimensions;
     void *Pixels;
     int BytesPerPixel;
 };
 
-
-struct game_button_state {
+struct game_button_state 
+{
     bool EndedDown;
     int HalfTransitionCount;
 };
 
-struct game_controller_input {
+struct game_controller_input 
+{
     game_button_state MoveUp;
     game_button_state MoveRight;
     game_button_state MoveDown;
     game_button_state MoveLeft;
 };
 
-struct game_input {
+struct game_input 
+{
     /**
      * List of Keyboard and four controller states. 
      * - Index 0 is the Keyboard

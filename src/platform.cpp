@@ -216,15 +216,15 @@ int main(int argc, char *argv[])
                     bool IsDown = (e.key.state == SDL_PRESSED);
 
                     // Investigate if WasDown is necessary for repeats.
-                    // bool WasDown = false;
-                    // if (e.key.state == SDL_RELEASED)
-                    // {
-                    //     WasDown = true;
-                    // }
-                    // else if (e.key.repeat != 0)
-                    // {
-                    //     WasDown = true;
-                    // }
+                    bool WasDown = false;
+                    if (e.key.state == SDL_RELEASED)
+                    {
+                        WasDown = true;
+                    }
+                    else if (e.key.repeat != 0)
+                    {
+                        WasDown = true;
+                    }
 
                     if (e.key.repeat == 0)
                     {
@@ -243,6 +243,20 @@ int main(int argc, char *argv[])
                         else if(KeyCode == SDLK_LEFT)
                         {
                             printf("LEFT isDown: %d\n", IsDown);
+                        }
+                        else if(KeyCode == SDLK_ESCAPE)
+                        {
+                            printf("ESCAPE: ");
+                            if(IsDown)
+                            {
+                                printf("IsDown ");
+                            }
+                            if(WasDown)
+                            {
+                                printf("WasDown");
+                                Running= false;
+                            }
+                            printf("\n");
                         }
                     }
 
