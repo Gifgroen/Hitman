@@ -1,5 +1,5 @@
 CC=gcc
-COMMON_COMPILER_FLAGS="-g3 -Wall -std=c++11"
+COMMON_COMPILER_FLAGS="-g3 -Wall -std=c++20"
 
 BUILD_FLAGS="-DHITMAN_DEBUG=1"
 

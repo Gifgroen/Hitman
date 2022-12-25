@@ -16,4 +16,26 @@ struct offscreen_buffer {
     int BytesPerPixel;
 };
 
+
+struct game_button_state {
+    bool EndedDown;
+    int HalfTransitionCount;
+};
+
+struct game_controller_input {
+    game_button_state MoveUp;
+    game_button_state MoveRight;
+    game_button_state MoveDown;
+    game_button_state MoveLeft;
+};
+
+struct game_input {
+    /**
+     * List of Keyboard and four controller states. 
+     * - Index 0 is the Keyboard
+     * - Index 1..3 are controllers
+     */
+    game_controller_input Controllers[MAX_CONTROLLER_COUNT];
+};
+
 #endif

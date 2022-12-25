@@ -103,7 +103,8 @@ int main(int argc, char *argv[])
     GameUpdateAndRender_t GameUpdateAndRender = (GameUpdateAndRender_t) dlsym(Handle, "GameUpdateAndRender");
 
     const char *DlSymError = dlerror();
-    if (DlSymError) {
+    if (DlSymError) 
+    {
         printf("Cannot load symbol 'GameUpdateAndRender_t': %s \n", DlSymError);
         dlclose(Handle);
         return 1;
@@ -132,7 +133,8 @@ int main(int argc, char *argv[])
         int ControllerIndex = i + 1;
         printf("ControllerIndex = %d, Count = %lu\n", ControllerIndex, ArrayCount(ControllerHandles));
 
-        if (ControllerIndex == ArrayCount(ControllerHandles)) {
+        if (ControllerIndex == ArrayCount(ControllerHandles)) 
+        {
             break;
         }
         if (!SDL_IsGameController(i)) 
@@ -181,34 +183,91 @@ int main(int argc, char *argv[])
     {
         while(SDL_PollEvent(&e) != 0)
         {
-            if(e.type == SDL_QUIT)
-            {
-                Running = false;
-            }
-            else if(e.type == SDL_WINDOWEVENT)
-            {       
-                switch(e.window.event)
+            switch (e.type) {
+                case SDL_QUIT:
                 {
-                    case SDL_WINDOWEVENT_SIZE_CHANGED: {
-                        int NewWidth = e.window.data1;
-                        int NewHeight = e.window.data2;
-                        window_dimensions NewDimensions = { NewWidth, NewHeight };
-                        UpdateOffscreenBufferDimensions(Renderer, &Buffer, NewDimensions);
-                    } break;
+                    Running = false;
+                } break;
 
-                    case SDL_WINDOWEVENT_EXPOSED: {
-                        window_dimensions KnownDimensions = GetWindowDimensions(Window);
-                        UpdateOffscreenBufferDimensions(Renderer, &Buffer, KnownDimensions);
-                    } break;
+                case SDL_WINDOWEVENT: 
+                {
+                    switch(e.window.event)
+                    {
+                        case SDL_WINDOWEVENT_SIZE_CHANGED: 
+                        {
+                            int NewWidth = e.window.data1;
+                            int NewHeight = e.window.data2;
+                            window_dimensions NewDimensions = { NewWidth, NewHeight };
+                            UpdateOffscreenBufferDimensions(Renderer, &Buffer, NewDimensions);
+                        } break;
 
-                    default: {
-#if HITMAN_DEBUG
-                        printf("WINDOWEVENT: type = %d\n", e.window.type);
-#endif
-                    } break;
-                }
+                        case SDL_WINDOWEVENT_EXPOSED: 
+                        {
+                            window_dimensions KnownDimensions = GetWindowDimensions(Window);
+                            UpdateOffscreenBufferDimensions(Renderer, &Buffer, KnownDimensions);
+                        } break;
+                    }
+                } break;
+
+                case SDL_KEYDOWN:
+                case SDL_KEYUP: 
+                {
+                    SDL_Keycode KeyCode = e.key.keysym.sym;
+                    bool IsDown = (e.key.state == SDL_PRESSED);
+
+                    // Investigate if WasDown is necessary for repeats.
+                    // bool WasDown = false;
+                    // if (e.key.state == SDL_RELEASED)
+                    // {
+                    //     WasDown = true;
+                    // }
+                    // else if (e.key.repeat != 0)
+                    // {
+                    //     WasDown = true;
+                    // }
+
+                    if (e.key.repeat == 0)
+                    {
+                        if(KeyCode == SDLK_UP)
+                        {
+                            printf("UP isDown: %d\n", IsDown);
+                        }
+                        else if(KeyCode == SDLK_RIGHT)
+                        {
+                            printf("RIGHT isDown: %d\n", IsDown);
+                        }
+                        else if(KeyCode == SDLK_DOWN)
+                        {
+                            printf("DOWN isDown: %d\n", IsDown);
+                        }
+                        else if(KeyCode == SDLK_LEFT)
+                        {
+                            printf("LEFT isDown: %d\n", IsDown);
+                        }
+                    }
+
+                } break;
+
             }
         }
+
+        // REGION: Process Controller Input
+
+        for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex)
+        {
+            SDL_GameController *Controller = ControllerHandles[ControllerIndex];
+            if(Controller != 0 && SDL_GameControllerGetAttached(Controller))
+            {
+                bool Up = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_UP);
+                bool Right = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+                bool Down = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+                bool Left = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+
+                printf("up = %d, right = %d, down = %d, left = %d", Up, Down, Left, Right);
+            }
+        }
+        
+        // ENDREGION: Process Controller Input
 
         GameUpdateAndRender(&Buffer);
         
@@ -280,9 +339,10 @@ int main(int argc, char *argv[])
     }
     for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
     {
-        if (ControllerHandles[i]) {
-            printf("Closing %s\n", SDL_GameControllerName(ControllerHandles[i]));
+        if (ControllerHandles[i]) 
+        {
             SDL_GameControllerClose(ControllerHandles[i]);
+            ControllerHandles[i] = NULL;
         }
     }
 
