@@ -20,16 +20,23 @@ struct offscreen_buffer
 
 struct game_button_state 
 {
-    bool EndedDown;
+    bool IsDown;
     int HalfTransitionCount;
 };
 
 struct game_controller_input 
 {
-    game_button_state MoveUp;
-    game_button_state MoveRight;
-    game_button_state MoveDown;
-    game_button_state MoveLeft;
+    union 
+    {
+        game_button_state Buttons[4];
+        struct  
+        {
+            game_button_state MoveUp;
+            game_button_state MoveRight;
+            game_button_state MoveDown;
+            game_button_state MoveLeft;
+        };
+    };
 };
 
 struct game_input 

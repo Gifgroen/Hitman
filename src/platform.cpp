@@ -75,9 +75,166 @@ internal int GetWindowRefreshRate(SDL_Window *Window)
     return Mode.refresh_rate;
 }
 
+internal void OpenInputControllers() 
+{
+    for (int i = 0; i < SDL_NumJoysticks(); ++i)
+    {
+        int ControllerIndex = i + 1;
+        if (ControllerIndex == ArrayCount(ControllerHandles)) 
+        {
+            break;
+        }
+        if (!SDL_IsGameController(i)) 
+        { 
+            continue; 
+        }
+
+        ControllerHandles[ControllerIndex] = SDL_GameControllerOpen(i);
+    }
+}
+
 internal float GetSecondsElapsed(u_int64_t OldCounter, u_int64_t CurrentCounter)
 {
     return ((float)(CurrentCounter - OldCounter) / (float)(SDL_GetPerformanceFrequency()));
+}
+
+internal game_controller_input *GetControllerForIndex(game_input *Input, int Index) {
+    game_controller_input *Result = &(Input->Controllers[Index]);
+    return Result;
+}
+
+internal void HandleWindowEvent(SDL_WindowEvent e, SDL_Renderer *Renderer, offscreen_buffer *Buffer) 
+{
+    switch(e.event)
+    {
+        case SDL_WINDOWEVENT_SIZE_CHANGED: 
+        {
+            int NewWidth = e.data1;
+            int NewHeight = e.data2;
+            window_dimensions NewDimensions = { NewWidth, NewHeight };
+            UpdateOffscreenBufferDimensions(Renderer, Buffer, NewDimensions);
+        } break;
+
+        case SDL_WINDOWEVENT_EXPOSED: 
+        {
+            window_dimensions KnownDimensions = GetWindowDimensions(Window);
+            UpdateOffscreenBufferDimensions(Renderer, Buffer, KnownDimensions);
+        } break;
+    }
+}
+
+internal void ProcessKeyInput(game_button_state *NewState, bool IsDown)
+{
+    Assert(NewState->IsDown != IsDown);
+    NewState->IsDown = IsDown;
+    ++NewState->HalfTransitionCount;
+}
+
+internal void SDLProcessGameControllerButton(game_button_state *OldState, game_button_state *NewState, bool Value)
+{
+    NewState->IsDown = Value;
+    NewState->HalfTransitionCount += ((NewState->IsDown == OldState->IsDown) ? 0 : 1);
+}
+
+internal void HandleKeyEvent(SDL_KeyboardEvent key, game_controller_input *KeyboardController)
+{
+    SDL_Keycode KeyCode = key.keysym.sym;
+    bool IsDown = (key.state == SDL_PRESSED);
+
+    // Investigate if WasDown is necessary for repeats.
+    bool WasDown = false;
+    if (key.state == SDL_RELEASED)
+    {
+        WasDown = true;
+    }
+    else if (key.repeat != 0)
+    {
+        WasDown = true;
+    }
+
+    if (key.repeat == 0)
+    {
+        if(KeyCode == SDLK_UP)
+        {
+            ProcessKeyInput(&(KeyboardController->MoveUp), IsDown);
+        }
+        else if(KeyCode == SDLK_RIGHT)
+        {
+            ProcessKeyInput(&(KeyboardController->MoveRight), IsDown);
+        }
+        else if(KeyCode == SDLK_DOWN)
+        {
+            ProcessKeyInput(&(KeyboardController->MoveDown), IsDown);
+        }
+        else if(KeyCode == SDLK_LEFT)
+        {
+            ProcessKeyInput(&(KeyboardController->MoveLeft), IsDown);
+        }
+        else if(KeyCode == SDLK_ESCAPE)
+        {
+            printf("ESCAPE: ");
+            if(IsDown)
+            {
+                printf("IsDown ");
+            }
+            if(WasDown)
+            {
+                printf("WasDown");
+                Running= false;
+            }
+            printf("\n");
+        }
+    }
+}
+
+internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput) 
+{
+    for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex)
+    {
+        SDL_GameController *Controller = ControllerHandles[ControllerIndex];
+        if(Controller != 0 && SDL_GameControllerGetAttached(Controller))
+        {
+            SDLProcessGameControllerButton(
+                &(GetControllerForIndex(OldInput, ControllerIndex)->MoveUp),
+                &(GetControllerForIndex(NewInput, ControllerIndex)->MoveUp),
+                SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_UP)
+            );
+
+            SDLProcessGameControllerButton(
+                &(GetControllerForIndex(OldInput, ControllerIndex)->MoveRight),
+                &(GetControllerForIndex(NewInput, ControllerIndex)->MoveRight),
+                SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
+            );
+            SDLProcessGameControllerButton(
+                &(GetControllerForIndex(OldInput, ControllerIndex)->MoveDown),
+                &(GetControllerForIndex(NewInput, ControllerIndex)->MoveDown),
+                SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN)
+            );
+            SDLProcessGameControllerButton(
+                &(GetControllerForIndex(OldInput, ControllerIndex)->MoveLeft),
+                &(GetControllerForIndex(NewInput, ControllerIndex)->MoveLeft),
+                SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT)
+            );
+        }
+    }
+}
+
+internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPerFrame) 
+{
+    if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
+    {
+        int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 2;
+        if (TimeToSleep > 0)
+        {
+            SDL_Delay(TimeToSleep);
+        }
+
+        Assert(GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame);
+        while (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
+        {
+            // Waiting...
+        }
+    }
 }
 
 int main(int argc, char *argv[]) 
@@ -87,9 +244,6 @@ int main(int argc, char *argv[])
 #endif
 
     // REGION - Load Game Library code!
-#if HITMAN_DEBUG
-    printf("Opening libhitman.so...\n");
-#endif
     void* Handle = dlopen("../build/libhitman.so", RTLD_LAZY);
     if (!Handle) 
     {
@@ -97,7 +251,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    typedef void (*GameUpdateAndRender_t)(offscreen_buffer*);
+    typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
 
     dlerror();  // reset dl errors
     GameUpdateAndRender_t GameUpdateAndRender = (GameUpdateAndRender_t) dlsym(Handle, "GameUpdateAndRender");
@@ -109,10 +263,6 @@ int main(int argc, char *argv[])
         dlclose(Handle);
         return 1;
     }
-
-#if HITMAN_DEBUG
-    printf("Loaded Game service from libhitman!\n");
-#endif 
 
     // ENDREGION - Load Game Library code!
 
@@ -128,24 +278,6 @@ int main(int argc, char *argv[])
     u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
-    for (int i = 0; i < SDL_NumJoysticks(); ++i)
-    {
-        int ControllerIndex = i + 1;
-        printf("ControllerIndex = %d, Count = %lu\n", ControllerIndex, ArrayCount(ControllerHandles));
-
-        if (ControllerIndex == ArrayCount(ControllerHandles)) 
-        {
-            break;
-        }
-        if (!SDL_IsGameController(i)) 
-        { 
-            continue; 
-        }
-
-        ControllerHandles[ControllerIndex] = SDL_GameControllerOpen(i);
-        printf("Connected %s\n", SDL_GameControllerNameForIndex(i));
-    }
-
     int WindowWidth = 1280;
     int WindowHeight = 1024;
     u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
@@ -153,9 +285,10 @@ int main(int argc, char *argv[])
 
     SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
 
+    OpenInputControllers();
+
     int GameUpdateHz = 30;
     double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
-
     if (GetWindowRefreshRate(Window) !=  GameUpdateHz) 
     {
         printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", GetWindowRefreshRate(Window), GameUpdateHz);
@@ -171,6 +304,10 @@ int main(int argc, char *argv[])
     
     // ENDREGION: setup offscreen buffer
 
+    game_input Input[2] = {};
+    game_input *OldInput = &Input[0];
+    game_input *NewInput = &Input[1];
+
     u_int64_t LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
@@ -181,125 +318,50 @@ int main(int argc, char *argv[])
 
     while(Running) 
     {
+        game_controller_input *OldKeyboardController = GetControllerForIndex(OldInput, 0);
+        game_controller_input *NewKeyboardController = GetControllerForIndex(NewInput, 0);
+        *NewKeyboardController = {};
+        for(int ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+        {
+            NewKeyboardController->Buttons[ButtonIndex].IsDown =
+            OldKeyboardController->Buttons[ButtonIndex].IsDown;
+        }
+
         while(SDL_PollEvent(&e) != 0)
         {
             switch (e.type) {
+                case SDL_WINDOWEVENT: 
+                {
+                    HandleWindowEvent(e.window, Renderer, &Buffer);
+                } break;
+
                 case SDL_QUIT:
                 {
                     Running = false;
                 } break;
 
-                case SDL_WINDOWEVENT: 
-                {
-                    switch(e.window.event)
-                    {
-                        case SDL_WINDOWEVENT_SIZE_CHANGED: 
-                        {
-                            int NewWidth = e.window.data1;
-                            int NewHeight = e.window.data2;
-                            window_dimensions NewDimensions = { NewWidth, NewHeight };
-                            UpdateOffscreenBufferDimensions(Renderer, &Buffer, NewDimensions);
-                        } break;
-
-                        case SDL_WINDOWEVENT_EXPOSED: 
-                        {
-                            window_dimensions KnownDimensions = GetWindowDimensions(Window);
-                            UpdateOffscreenBufferDimensions(Renderer, &Buffer, KnownDimensions);
-                        } break;
-                    }
-                } break;
-
                 case SDL_KEYDOWN:
                 case SDL_KEYUP: 
                 {
-                    SDL_Keycode KeyCode = e.key.keysym.sym;
-                    bool IsDown = (e.key.state == SDL_PRESSED);
-
-                    // Investigate if WasDown is necessary for repeats.
-                    bool WasDown = false;
-                    if (e.key.state == SDL_RELEASED)
-                    {
-                        WasDown = true;
-                    }
-                    else if (e.key.repeat != 0)
-                    {
-                        WasDown = true;
-                    }
-
-                    if (e.key.repeat == 0)
-                    {
-                        if(KeyCode == SDLK_UP)
-                        {
-                            printf("UP isDown: %d\n", IsDown);
-                        }
-                        else if(KeyCode == SDLK_RIGHT)
-                        {
-                            printf("RIGHT isDown: %d\n", IsDown);
-                        }
-                        else if(KeyCode == SDLK_DOWN)
-                        {
-                            printf("DOWN isDown: %d\n", IsDown);
-                        }
-                        else if(KeyCode == SDLK_LEFT)
-                        {
-                            printf("LEFT isDown: %d\n", IsDown);
-                        }
-                        else if(KeyCode == SDLK_ESCAPE)
-                        {
-                            printf("ESCAPE: ");
-                            if(IsDown)
-                            {
-                                printf("IsDown ");
-                            }
-                            if(WasDown)
-                            {
-                                printf("WasDown");
-                                Running= false;
-                            }
-                            printf("\n");
-                        }
-                    }
-
+                    HandleKeyEvent(e.key, NewKeyboardController);
                 } break;
 
             }
         }
 
         // REGION: Process Controller Input
-
-        for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex)
-        {
-            SDL_GameController *Controller = ControllerHandles[ControllerIndex];
-            if(Controller != 0 && SDL_GameControllerGetAttached(Controller))
-            {
-                bool Up = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_UP);
-                bool Right = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-                bool Down = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-                bool Left = SDL_GameControllerGetButton(Controller, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-
-                printf("up = %d, right = %d, down = %d, left = %d", Up, Down, Left, Right);
-            }
-        }
-        
+        HandleControllerEvents(OldInput, NewInput);
         // ENDREGION: Process Controller Input
 
-        GameUpdateAndRender(&Buffer);
-        
-        // REGION: Time our frame duration
-        if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
-        {
-            int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 2;
-            if (TimeToSleep > 0)
-            {
-                SDL_Delay(TimeToSleep);
-            }
+        GameUpdateAndRender(&Buffer, NewInput);
 
-            Assert(GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame);
-            while (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
-            {
-                // Waiting...
-            }
-        }
+        game_input *Temp = NewInput;
+        NewInput = OldInput;
+        OldInput = Temp;
+        
+        *NewInput = {};
+        
+        TryWaitForNextFrame(LastCounter, TargetSecondsPerFrame);
 
 #if HITMAN_DEBUG
         // Get this before UpdateWindow() so that we don't keep missing VBlanks.
@@ -322,9 +384,7 @@ int main(int argc, char *argv[])
 
         LastCycleCount = EndCycleCount;
         LastCounter = EndCounter;
-    
-        // ENDREGION: Time our frame duration
-    #endif
+#endif
     }
 
     // ENDREGION - Platform using SDL
