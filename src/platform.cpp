@@ -1,12 +1,12 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <x86intrin.h>
 
 #include <SDL2/SDL.h>
 
-#include <sys/types.h>
-#include <sys/stat.h>
 // #ifndef WIN32
 // #include <unistd.h>
 // #endif
@@ -15,30 +15,12 @@
 // #endif
 
 #include "hitman.h"
-
-#define global static
-#define internal static
-#define local_persist static
-
-#define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
-
-#define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
+#include "platform.h"
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
 global SDL_Window *Window = NULL;
 global SDL_Texture *WindowTexture = NULL;
-
-typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
-
-struct game_code
-{
-    char const *LibPath;
-    void* LibHandle;
-    int64_t LastWriteTime;
-
-    GameUpdateAndRender_t GameUpdateAndRender;
-};
 
 global bool Running = true;
 
@@ -257,11 +239,12 @@ internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPer
     }
 }
 
-int64_t GameCodeChanged(game_code *GameCode) 
+internal int64_t GameCodeChanged(game_code *GameCode) 
 {
     char const *filename = GameCode->LibPath;
     struct stat result;
-    if (stat(filename, &result) == 0) {
+    if (stat(filename, &result) == 0) 
+    {
         return result.st_mtime;
     }
     return 0;
@@ -306,7 +289,6 @@ int main(int argc, char *argv[])
 
     game_code GameCode = {};
     GameCode.LibPath = "../build/libhitman.so";
-    // LoadGameCode(&GameCode);
 
     // REGION - Platform using SDL
     u_int32_t SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
@@ -324,16 +306,25 @@ int main(int argc, char *argv[])
     int WindowHeight = 1024;
     u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WindowWidth, WindowHeight, WindowFlags);
+    if (!Window) {
+        printf("Failed to create a SDL_Window, %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
 
     SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+    if (!Renderer) {
+        printf("Failed to create an SDL_Renderer, %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
 
     OpenInputControllers();
 
     int GameUpdateHz = 30;
     double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
-    if (GetWindowRefreshRate(Window) !=  GameUpdateHz) 
+    int DetectedFrameRate = GetWindowRefreshRate(Window);
+    if (DetectedFrameRate != GameUpdateHz) 
     {
-        printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", GetWindowRefreshRate(Window), GameUpdateHz);
+        printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", DetectedFrameRate, GameUpdateHz);
     }
 
     offscreen_buffer Buffer = {};
@@ -341,7 +332,6 @@ int main(int argc, char *argv[])
     // Initial sizing of the game screen.
     window_dimensions Dimensions = GetWindowDimensions(Window);
     UpdateOffscreenBufferDimensions(Renderer, &Buffer, Dimensions);
-    
 
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
@@ -388,13 +378,7 @@ int main(int argc, char *argv[])
             }
         }
 
-        // REGION: Process Controller Input
         HandleControllerEvents(OldInput, NewInput);
-        // ENDREGION: Process Controller Input
-
-        /**
-         * TODO: check refresh guard; (last write time) of file at GameCode.LibPath has changed recently 
-         */
 
         if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) {
             printf("GameCode has changed, reloading!\n");
