@@ -9,6 +9,12 @@
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
+struct SDL_setup {
+    SDL_Window *Window;
+    SDL_Renderer *Renderer;
+    SDL_Texture *WindowTexture = NULL;
+};
+
 typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
 
 struct game_code
@@ -19,6 +25,5 @@ struct game_code
 
     GameUpdateAndRender_t GameUpdateAndRender;
 };
-
 
 #endif

@@ -19,17 +19,18 @@
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
-global SDL_Window *Window = NULL;
-global SDL_Texture *WindowTexture = NULL;
+// global SDL_Window *Window = NULL;
+// global SDL_Texture *WindowTexture = NULL;
 
 global bool Running = true;
 
-internal void UpdateOffscreenBufferDimensions(SDL_Renderer *Renderer, offscreen_buffer *Buffer, window_dimensions NewDimensions)
+internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
-    if (WindowTexture) 
+    // SDL_Texture *WindowTexture = Setup->WindowTexture;
+    if (Setup->WindowTexture) 
     {
-        SDL_DestroyTexture(WindowTexture);
-        WindowTexture = NULL;
+        SDL_DestroyTexture(Setup->WindowTexture);
+        Setup->WindowTexture = NULL;
     }
 
     if (Buffer->Pixels) 
@@ -40,7 +41,7 @@ internal void UpdateOffscreenBufferDimensions(SDL_Renderer *Renderer, offscreen_
 
     int Width = NewDimensions.Width;
     int Height = NewDimensions.Height; 
-    WindowTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
+    Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
     Buffer->Pixels = mmap(0, Width * Height * Buffer->BytesPerPixel, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     Buffer->Dimensions = { Width, Height };
@@ -105,7 +106,7 @@ internal game_controller_input *GetControllerForIndex(game_input *Input, int Ind
     return Result;
 }
 
-internal void HandleWindowEvent(SDL_WindowEvent e, SDL_Renderer *Renderer, offscreen_buffer *Buffer) 
+internal void HandleWindowEvent(SDL_WindowEvent e, SDL_setup *Setup, offscreen_buffer *Buffer) 
 {
     switch(e.event)
     {
@@ -114,13 +115,13 @@ internal void HandleWindowEvent(SDL_WindowEvent e, SDL_Renderer *Renderer, offsc
             int NewWidth = e.data1;
             int NewHeight = e.data2;
             window_dimensions NewDimensions = { NewWidth, NewHeight };
-            UpdateOffscreenBufferDimensions(Renderer, Buffer, NewDimensions);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, NewDimensions);
         } break;
 
         case SDL_WINDOWEVENT_EXPOSED: 
         {
-            window_dimensions KnownDimensions = GetWindowDimensions(Window);
-            UpdateOffscreenBufferDimensions(Renderer, Buffer, KnownDimensions);
+            window_dimensions KnownDimensions = GetWindowDimensions(Setup->Window);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, KnownDimensions);
         } break;
     }
 }
@@ -281,6 +282,59 @@ internal int LoadGameCode(game_code *GameCode)
     return 0;
 }
 
+internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions) 
+{
+    u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
+    Assert(Setup->Window);
+    // if (!Setup->Window) {
+    //     printf("Failed to create a SDL_Window, %s\n", SDL_GetError());
+    //     return;
+    // }
+
+    Setup->Renderer = SDL_CreateRenderer(Setup->Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+    Assert(Setup->Renderer);
+    // if (!Setup->Renderer) {
+    //     printf("Failed to create an SDL_Renderer, %s\n", SDL_GetError());
+    //     return;
+    // }
+}
+
+internal void CloseGame(game_code *GameCode, SDL_setup *Setup) 
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+
+    if (Setup->WindowTexture) 
+    {
+        SDL_DestroyTexture(Setup->WindowTexture);
+        Setup->WindowTexture = NULL;
+    }
+    if (Setup->Renderer) 
+    {
+        SDL_DestroyRenderer(Setup->Renderer);
+        Setup->Renderer = NULL;
+    }
+    if (Setup->Window) 
+    {
+        SDL_DestroyWindow(Setup->Window);
+	    Setup->Window = NULL;
+    }
+    for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    {
+        if (ControllerHandles[i]) 
+        {
+            SDL_GameControllerClose(ControllerHandles[i]);
+            ControllerHandles[i] = NULL;
+        }
+    }
+
+	SDL_Quit();
+}
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -302,26 +356,16 @@ int main(int argc, char *argv[])
     u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
-    int WindowWidth = 1280;
-    int WindowHeight = 1024;
-    u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-    Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WindowWidth, WindowHeight, WindowFlags);
-    if (!Window) {
-        printf("Failed to create a SDL_Window, %s\n", SDL_GetError());
-        return EXIT_FAILURE;
-    }
+    local_persist SDL_setup SdlSetup = {};
 
-    SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
-    if (!Renderer) {
-        printf("Failed to create an SDL_Renderer, %s\n", SDL_GetError());
-        return EXIT_FAILURE;
-    }
+    window_dimensions Dimensions = { 1280, 1024 };
+    SetupSdl(&SdlSetup, Dimensions);
 
     OpenInputControllers();
 
     int GameUpdateHz = 30;
     double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
-    int DetectedFrameRate = GetWindowRefreshRate(Window);
+    int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
     if (DetectedFrameRate != GameUpdateHz) 
     {
         printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", DetectedFrameRate, GameUpdateHz);
@@ -330,8 +374,7 @@ int main(int argc, char *argv[])
     offscreen_buffer Buffer = {};
     Buffer.BytesPerPixel = sizeof(u_int32_t);
     // Initial sizing of the game screen.
-    window_dimensions Dimensions = GetWindowDimensions(Window);
-    UpdateOffscreenBufferDimensions(Renderer, &Buffer, Dimensions);
+    UpdateOffscreenBufferDimensions(&SdlSetup, &Buffer, Dimensions);
 
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
@@ -361,7 +404,7 @@ int main(int argc, char *argv[])
             switch (e.type) {
                 case SDL_WINDOWEVENT: 
                 {
-                    HandleWindowEvent(e.window, Renderer, &Buffer);
+                    HandleWindowEvent(e.window, &SdlSetup, &Buffer);
                 } break;
 
                 case SDL_QUIT:
@@ -400,7 +443,7 @@ int main(int argc, char *argv[])
         u_int64_t EndCounter = SDL_GetPerformanceCounter();
 #endif
 
-        UpdateWindow(WindowTexture, &Buffer,  Renderer);
+        UpdateWindow(SdlSetup.WindowTexture, &Buffer,  SdlSetup.Renderer);
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.
@@ -421,37 +464,7 @@ int main(int argc, char *argv[])
 
     // ENDREGION - Platform using SDL
 
-    if (GameCode.LibHandle) 
-    {
-        dlclose(GameCode.LibHandle);
-        GameCode.LibHandle = NULL;
-    }
-
-    if (WindowTexture) 
-    {
-        SDL_DestroyTexture(WindowTexture);
-        WindowTexture = NULL;
-    }
-    if (Renderer) 
-    {
-        SDL_DestroyRenderer(Renderer);
-        Renderer = NULL;
-    }
-    if (Window) 
-    {
-        SDL_DestroyWindow(Window);
-	    Window = NULL;
-    }
-    for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
-    {
-        if (ControllerHandles[i]) 
-        {
-            SDL_GameControllerClose(ControllerHandles[i]);
-            ControllerHandles[i] = NULL;
-        }
-    }
-
-	SDL_Quit();
+    CloseGame(&GameCode, &SdlSetup);
  
     return EXIT_SUCCESS;
 }
