@@ -5,6 +5,15 @@
 
 #include <SDL2/SDL.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+// #ifndef WIN32
+// #include <unistd.h>
+// #endif
+// #ifdef WIN32
+// #define stat _stat
+// #endif
+
 #include "hitman.h"
 
 #define global static
@@ -19,6 +28,17 @@ global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
 global SDL_Window *Window = NULL;
 global SDL_Texture *WindowTexture = NULL;
+
+typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
+
+struct game_code
+{
+    char const *LibPath;
+    void* LibHandle;
+    int64_t LastWriteTime;
+
+    GameUpdateAndRender_t GameUpdateAndRender;
+};
 
 global bool Running = true;
 
@@ -223,7 +243,7 @@ internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPer
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
-        int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 2;
+        int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 3;
         if (TimeToSleep > 0)
         {
             SDL_Delay(TimeToSleep);
@@ -237,41 +257,63 @@ internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPer
     }
 }
 
+int64_t GameCodeChanged(game_code *GameCode) 
+{
+    char const *filename = GameCode->LibPath;
+    struct stat result;
+    if (stat(filename, &result) == 0) {
+        return result.st_mtime;
+    }
+    return 0;
+}
+
+internal int LoadGameCode(game_code *GameCode)
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+
+    GameCode->LibHandle = dlopen(GameCode->LibPath, RTLD_LAZY);
+    if (!GameCode->LibHandle) 
+    {
+        printf("Cannot open library: %s\n", dlerror());
+        return -1;
+    }
+
+    dlerror();  // reset dl errors
+    GameCode->GameUpdateAndRender = (GameUpdateAndRender_t)dlsym(GameCode->LibHandle, "GameUpdateAndRender");
+
+    char const *DlSymError = dlerror();
+    if (DlSymError) 
+    {
+        printf("Cannot load symbol(s) 'GameUpdateAndRender_t': %s \n", DlSymError);
+        dlclose(GameCode->LibHandle);
+        return 1;
+    }
+
+    GameCode->LastWriteTime = GameCodeChanged(GameCode);
+
+    return 0;
+}
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
     printf("Running Hitman in DEBUG mode!\n");
 #endif
 
-    // REGION - Load Game Library code!
-    void* Handle = dlopen("../build/libhitman.so", RTLD_LAZY);
-    if (!Handle) 
-    {
-        printf("Cannot open library: %s\n", dlerror());
-        return 1;
-    }
-
-    typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
-
-    dlerror();  // reset dl errors
-    GameUpdateAndRender_t GameUpdateAndRender = (GameUpdateAndRender_t) dlsym(Handle, "GameUpdateAndRender");
-
-    const char *DlSymError = dlerror();
-    if (DlSymError) 
-    {
-        printf("Cannot load symbol 'GameUpdateAndRender_t': %s \n", DlSymError);
-        dlclose(Handle);
-        return 1;
-    }
-
-    // ENDREGION - Load Game Library code!
+    game_code GameCode = {};
+    GameCode.LibPath = "../build/libhitman.so";
+    // LoadGameCode(&GameCode);
 
     // REGION - Platform using SDL
     u_int32_t SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
     if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
-        return 1;
+        return EXIT_FAILURE;
     }
     
 #if HITMAN_DEBUG
@@ -294,15 +336,12 @@ int main(int argc, char *argv[])
         printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", GetWindowRefreshRate(Window), GameUpdateHz);
     }
 
-    // REGION: setup offscreen buffer
-
     offscreen_buffer Buffer = {};
     Buffer.BytesPerPixel = sizeof(u_int32_t);
     // Initial sizing of the game screen.
     window_dimensions Dimensions = GetWindowDimensions(Window);
     UpdateOffscreenBufferDimensions(Renderer, &Buffer, Dimensions);
     
-    // ENDREGION: setup offscreen buffer
 
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
@@ -353,7 +392,16 @@ int main(int argc, char *argv[])
         HandleControllerEvents(OldInput, NewInput);
         // ENDREGION: Process Controller Input
 
-        GameUpdateAndRender(&Buffer, NewInput);
+        /**
+         * TODO: check refresh guard; (last write time) of file at GameCode.LibPath has changed recently 
+         */
+
+        if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) {
+            printf("GameCode has changed, reloading!\n");
+            LoadGameCode(&GameCode);
+        }
+
+        GameCode.GameUpdateAndRender(&Buffer, NewInput);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
@@ -389,13 +437,12 @@ int main(int argc, char *argv[])
 
     // ENDREGION - Platform using SDL
 
-    if (Handle) 
+    if (GameCode.LibHandle) 
     {
-        printf("Closing library\n");
-        dlclose(Handle);
+        dlclose(GameCode.LibHandle);
+        GameCode.LibHandle = NULL;
     }
 
-    printf("Quiting SDL\n");
     if (WindowTexture) 
     {
         SDL_DestroyTexture(WindowTexture);
@@ -422,5 +469,5 @@ int main(int argc, char *argv[])
 
 	SDL_Quit();
  
-    return 0;
+    return EXIT_SUCCESS;
 }
