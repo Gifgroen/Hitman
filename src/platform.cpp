@@ -27,16 +27,17 @@ internal void Alloc(offscreen_buffer *Buffer)
     window_dimensions Dim = Buffer->Dimensions;
     int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    Buffer->Pixels = VirtualAlloc(0, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 #else 
-    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    Buffer->Pixels = mmap(NULL, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 #endif
 }
 
 internal void Dealloc(offscreen_buffer *Buffer) 
 {
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
+    bool Result = VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
+    Assert(Result)
 #else 
     window_dimensions Dim = Buffer->Dimensions;
     munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
