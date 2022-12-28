@@ -23,7 +23,7 @@ struct game_code
 {
     char const *LibPath;
     void* LibHandle;
-    int64_t LastWriteTime;
+    int64 LastWriteTime;
 
     GameUpdateAndRender_t GameUpdateAndRender;
 };

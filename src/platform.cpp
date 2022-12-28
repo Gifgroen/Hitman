@@ -246,7 +246,7 @@ internal void TryWaitForNextFrame(uint64 LastCounter, double TargetSecondsPerFra
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
-        int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 3;
+        int32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 3;
         if (TimeToSleep > 0)
         {
             SDL_Delay(TimeToSleep);
@@ -260,7 +260,7 @@ internal void TryWaitForNextFrame(uint64 LastCounter, double TargetSecondsPerFra
     }
 }
 
-internal int64_t GameCodeChanged(game_code *GameCode) 
+internal int64 GameCodeChanged(game_code *GameCode) 
 {
     char const *filename = GameCode->LibPath;
     struct stat result;
