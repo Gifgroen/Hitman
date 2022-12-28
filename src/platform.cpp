@@ -42,7 +42,6 @@ internal void Dealloc(offscreen_buffer *Buffer)
     window_dimensions Dim = Buffer->Dimensions;
     munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
 #endif
-
 }
 
 internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
