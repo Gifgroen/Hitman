@@ -308,7 +308,6 @@ internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions)
 
     Setup->Renderer = SDL_CreateRenderer(Setup->Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     Assert(Setup->Renderer);
-
 }
 
 internal void CloseGame(game_code *GameCode, SDL_setup *Setup) 
@@ -343,7 +342,7 @@ internal void CloseGame(game_code *GameCode, SDL_setup *Setup)
         }
     }
 
-	SDL_Quit();
+    SDL_Quit();
 }
 
 int main(int argc, char *argv[]) 
