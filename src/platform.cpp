@@ -47,7 +47,6 @@ internal void Dealloc(offscreen_buffer *Buffer)
 
 internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
-    // SDL_Texture *WindowTexture = Setup->WindowTexture;
     if (Setup->WindowTexture) 
     {
         SDL_DestroyTexture(Setup->WindowTexture);
@@ -307,17 +306,10 @@ internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions)
     uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
     Assert(Setup->Window);
-    // if (!Setup->Window) {
-    //     printf("Failed to create a SDL_Window, %s\n", SDL_GetError());
-    //     return;
-    // }
 
     Setup->Renderer = SDL_CreateRenderer(Setup->Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     Assert(Setup->Renderer);
-    // if (!Setup->Renderer) {
-    //     printf("Failed to create an SDL_Renderer, %s\n", SDL_GetError());
-    //     return;
-    // }
+
 }
 
 internal void CloseGame(game_code *GameCode, SDL_setup *Setup) 
