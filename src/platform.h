@@ -3,10 +3,6 @@
 
 #include "hitman_defines.h"
 
-#define global static
-#define internal static
-#define local_persist static
-
 #define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))

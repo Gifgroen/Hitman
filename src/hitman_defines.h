@@ -10,3 +10,7 @@
 #define uint16 uint16_t
 #define uint32 uint32_t
 #define uint64 uint64_t
+
+#define global static
+#define internal static
+#define local_persist static
