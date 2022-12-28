@@ -13,16 +13,16 @@ extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer, game_input *Input)
         bool cIsDown = Controller->MoveLeft.IsDown; 
         printf("[Controller %d][Left Pressed]  HalfTransitionCount = %d, IsDown = %d\n", i, cHalfTransitionCount, cIsDown);
     }
-
-    u_int8_t *Row = (u_int8_t *)Buffer->Pixels;
+    
+    uint8 *Row = (uint8 *)Buffer->Pixels;
     for(int Y = 0; Y < Dim.Height; ++Y)
     {
-        u_int32_t *Pixel = (u_int32_t *)Row;
+        uint32 *Pixel = (uint32 *)Row;
         for(int X = 0; X < Dim.Width; ++X)
         {
-            u_int8_t Red = 0;
-            u_int8_t Blue = X;
-            u_int8_t Green = Y;
+            uint8 Red = 0;
+            uint8 Blue = X;
+            uint8 Green = Y;
             
             *Pixel++ = ((Red << 16) | (Green << 8)) | Blue;
         }

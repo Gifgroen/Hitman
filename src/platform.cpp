@@ -1,28 +1,48 @@
 #include <dlfcn.h>
+
 #include <stdio.h>
-#include <sys/mman.h>
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    #include <memoryapi.h>
+#else 
+    #include <sys/mman.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/types.h>
+
 #include <x86intrin.h>
 
 #include <SDL2/SDL.h>
-
-// #ifndef WIN32
-// #include <unistd.h>
-// #endif
-// #ifdef WIN32
-// #define stat _stat
-// #endif
 
 #include "hitman.h"
 #include "platform.h"
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
-// global SDL_Window *Window = NULL;
-// global SDL_Texture *WindowTexture = NULL;
-
 global bool Running = true;
+
+internal void Alloc(offscreen_buffer *Buffer) 
+{
+    window_dimensions Dim = Buffer->Dimensions;
+    int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    Buffer->Pixels = VirtualAlloc(0, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#else 
+    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+#endif
+}
+
+internal void Dealloc(offscreen_buffer *Buffer) 
+{
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
+#else 
+    window_dimensions Dim = Buffer->Dimensions;
+    munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
+#endif
+
+}
 
 internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
@@ -35,15 +55,14 @@ internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer
 
     if (Buffer->Pixels) 
     {   
-        window_dimensions Dim = Buffer->Dimensions;
-        munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
+        Dealloc(Buffer);
     }
 
     int Width = NewDimensions.Width;
     int Height = NewDimensions.Height; 
     Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
-    Buffer->Pixels = mmap(0, Width * Height * Buffer->BytesPerPixel, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    Alloc(Buffer);
     Buffer->Dimensions = { Width, Height };
 }
 
@@ -96,7 +115,7 @@ internal void OpenInputControllers()
     }
 }
 
-internal float GetSecondsElapsed(u_int64_t OldCounter, u_int64_t CurrentCounter)
+internal float GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
 {
     return ((float)(CurrentCounter - OldCounter) / (float)(SDL_GetPerformanceFrequency()));
 }
@@ -222,7 +241,7 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPerFrame) 
+internal void TryWaitForNextFrame(uint64 LastCounter, double TargetSecondsPerFrame) 
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
@@ -284,7 +303,7 @@ internal int LoadGameCode(game_code *GameCode)
 
 internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions) 
 {
-    u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
     Assert(Setup->Window);
     // if (!Setup->Window) {
@@ -323,7 +342,7 @@ internal void CloseGame(game_code *GameCode, SDL_setup *Setup)
         SDL_DestroyWindow(Setup->Window);
 	    Setup->Window = NULL;
     }
-    for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    for (uint64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
     {
         if (ControllerHandles[i]) 
         {
@@ -345,7 +364,7 @@ int main(int argc, char *argv[])
     GameCode.LibPath = "../build/libhitman.so";
 
     // REGION - Platform using SDL
-    u_int32_t SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+    uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
     if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
@@ -353,7 +372,7 @@ int main(int argc, char *argv[])
     }
     
 #if HITMAN_DEBUG
-    u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
+    uint64 PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
     local_persist SDL_setup SdlSetup = {};
@@ -372,7 +391,7 @@ int main(int argc, char *argv[])
     }
 
     offscreen_buffer Buffer = {};
-    Buffer.BytesPerPixel = sizeof(u_int32_t);
+    Buffer.BytesPerPixel = sizeof(uint32);
     // Initial sizing of the game screen.
     UpdateOffscreenBufferDimensions(&SdlSetup, &Buffer, Dimensions);
 
@@ -380,10 +399,10 @@ int main(int argc, char *argv[])
     game_input *OldInput = &Input[0];
     game_input *NewInput = &Input[1];
 
-    u_int64_t LastCounter = SDL_GetPerformanceCounter(); 
+    uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
-    u_int64_t LastCycleCount = _rdtsc();
+    uint64 LastCycleCount = _rdtsc();
 #endif
 
     SDL_Event e;
@@ -393,7 +412,7 @@ int main(int argc, char *argv[])
         game_controller_input *OldKeyboardController = GetControllerForIndex(OldInput, 0);
         game_controller_input *NewKeyboardController = GetControllerForIndex(NewInput, 0);
         *NewKeyboardController = {};
-        for(int ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+        for(uint64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
         {
             NewKeyboardController->Buttons[ButtonIndex].IsDown =
             OldKeyboardController->Buttons[ButtonIndex].IsDown;
@@ -440,16 +459,16 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG
         // Get this before UpdateWindow() so that we don't keep missing VBlanks.
-        u_int64_t EndCounter = SDL_GetPerformanceCounter();
+        uint64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
         UpdateWindow(SdlSetup.WindowTexture, &Buffer,  SdlSetup.Renderer);
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.
-        u_int64_t EndCycleCount = _rdtsc();
-        u_int64_t CounterElapsed = EndCounter - LastCounter;
-        u_int64_t CyclesElapsed = EndCycleCount - LastCycleCount;
+        uint64 EndCycleCount = _rdtsc();
+        int64 CounterElapsed = EndCounter - LastCounter;
+        uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
 
         double MSPerFrame = (((1000.0f * (double)CounterElapsed) / (double)PerfCountFrequency));
         double FPS = (double)PerfCountFrequency / (double)CounterElapsed;

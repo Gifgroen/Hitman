@@ -1,6 +1,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include "hitman_defines.h"
+
 #define global static
 #define internal static
 #define local_persist static

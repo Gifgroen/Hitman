@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 
+#include "hitman_defines.h"
+
 #define MAX_CONTROLLER_COUNT 5
 
 struct window_dimensions 
