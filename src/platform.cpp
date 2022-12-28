@@ -1,47 +1,69 @@
 #include <dlfcn.h>
+
 #include <stdio.h>
-#include <sys/mman.h>
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    #include <memoryapi.h>
+#else 
+    #include <sys/types.h>
+    #include <sys/mman.h>
+#endif
+
+#include <sys/stat.h>
+
 #include <x86intrin.h>
 
 #include <SDL2/SDL.h>
 
 #include "hitman.h"
-
-#define global static
-#define internal static
-#define local_persist static
-
-#define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
-
-#define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
+#include "platform.h"
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
-global SDL_Window *Window = NULL;
-global SDL_Texture *WindowTexture = NULL;
-
 global bool Running = true;
 
-internal void UpdateOffscreenBufferDimensions(SDL_Renderer *Renderer, offscreen_buffer *Buffer, window_dimensions NewDimensions)
+internal void Alloc(offscreen_buffer *Buffer) 
 {
-    if (WindowTexture) 
+    window_dimensions Dim = Buffer->Dimensions;
+    int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#else 
+    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+#endif
+}
+
+internal void Dealloc(offscreen_buffer *Buffer) 
+{
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    bool Result = VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
+    Assert(Result)
+#else 
+    window_dimensions Dim = Buffer->Dimensions;
+    int Result = munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
+    Assert(Result == 0);
+#endif
+}
+
+internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
+{
+    if (Setup->WindowTexture) 
     {
-        SDL_DestroyTexture(WindowTexture);
-        WindowTexture = NULL;
+        SDL_DestroyTexture(Setup->WindowTexture);
+        Setup->WindowTexture = NULL;
     }
 
-    if (Buffer->Pixels) 
+    if (Buffer->Pixels)
     {   
-        window_dimensions Dim = Buffer->Dimensions;
-        munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
+        Dealloc(Buffer);
     }
 
     int Width = NewDimensions.Width;
     int Height = NewDimensions.Height; 
-    WindowTexture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
+    Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
-    Buffer->Pixels = mmap(0, Width * Height * Buffer->BytesPerPixel, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     Buffer->Dimensions = { Width, Height };
+    Alloc(Buffer);
 }
 
 internal window_dimensions GetWindowDimensions(SDL_Window *Window) 
@@ -93,7 +115,7 @@ internal void OpenInputControllers()
     }
 }
 
-internal float GetSecondsElapsed(u_int64_t OldCounter, u_int64_t CurrentCounter)
+internal float GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
 {
     return ((float)(CurrentCounter - OldCounter) / (float)(SDL_GetPerformanceFrequency()));
 }
@@ -103,7 +125,7 @@ internal game_controller_input *GetControllerForIndex(game_input *Input, int Ind
     return Result;
 }
 
-internal void HandleWindowEvent(SDL_WindowEvent e, SDL_Renderer *Renderer, offscreen_buffer *Buffer) 
+internal void HandleWindowEvent(SDL_WindowEvent e, SDL_setup *Setup, offscreen_buffer *Buffer) 
 {
     switch(e.event)
     {
@@ -112,13 +134,13 @@ internal void HandleWindowEvent(SDL_WindowEvent e, SDL_Renderer *Renderer, offsc
             int NewWidth = e.data1;
             int NewHeight = e.data2;
             window_dimensions NewDimensions = { NewWidth, NewHeight };
-            UpdateOffscreenBufferDimensions(Renderer, Buffer, NewDimensions);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, NewDimensions);
         } break;
 
         case SDL_WINDOWEVENT_EXPOSED: 
         {
-            window_dimensions KnownDimensions = GetWindowDimensions(Window);
-            UpdateOffscreenBufferDimensions(Renderer, Buffer, KnownDimensions);
+            window_dimensions KnownDimensions = GetWindowDimensions(Setup->Window);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, KnownDimensions);
         } break;
     }
 }
@@ -219,11 +241,11 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPerFrame) 
+internal void TryWaitForNextFrame(uint64 LastCounter, double TargetSecondsPerFrame) 
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
-        int32_t TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 2;
+        int32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 3;
         if (TimeToSleep > 0)
         {
             SDL_Delay(TimeToSleep);
@@ -237,81 +259,142 @@ internal void TryWaitForNextFrame(u_int64_t LastCounter, double TargetSecondsPer
     }
 }
 
+internal int64 GameCodeChanged(game_code *GameCode) 
+{
+    char const *filename = GameCode->LibPath;
+    struct stat result;
+    if (stat(filename, &result) == 0) 
+    {
+        return result.st_mtime;
+    }
+    return 0;
+}
+
+internal int LoadGameCode(game_code *GameCode)
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+
+    GameCode->LibHandle = dlopen(GameCode->LibPath, RTLD_LAZY);
+    if (!GameCode->LibHandle) 
+    {
+        printf("Cannot open library: %s\n", dlerror());
+        return -1;
+    }
+
+    dlerror();  // reset dl errors
+    GameCode->GameUpdateAndRender = (GameUpdateAndRender_t)dlsym(GameCode->LibHandle, "GameUpdateAndRender");
+
+    char const *DlSymError = dlerror();
+    if (DlSymError) 
+    {
+        printf("Cannot load symbol(s) 'GameUpdateAndRender_t': %s \n", DlSymError);
+        dlclose(GameCode->LibHandle);
+        return 1;
+    }
+
+    GameCode->LastWriteTime = GameCodeChanged(GameCode);
+
+    return 0;
+}
+
+internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions) 
+{
+    uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
+    Assert(Setup->Window);
+
+    Setup->Renderer = SDL_CreateRenderer(Setup->Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+    Assert(Setup->Renderer);
+}
+
+internal void CloseGame(game_code *GameCode, SDL_setup *Setup) 
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+
+    if (Setup->WindowTexture) 
+    {
+        SDL_DestroyTexture(Setup->WindowTexture);
+        Setup->WindowTexture = NULL;
+    }
+    if (Setup->Renderer) 
+    {
+        SDL_DestroyRenderer(Setup->Renderer);
+        Setup->Renderer = NULL;
+    }
+    if (Setup->Window) 
+    {
+        SDL_DestroyWindow(Setup->Window);
+	    Setup->Window = NULL;
+    }
+    for (uint64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    {
+        if (ControllerHandles[i]) 
+        {
+            SDL_GameControllerClose(ControllerHandles[i]);
+            ControllerHandles[i] = NULL;
+        }
+    }
+
+    SDL_Quit();
+}
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
     printf("Running Hitman in DEBUG mode!\n");
 #endif
 
-    // REGION - Load Game Library code!
-    void* Handle = dlopen("../build/libhitman.so", RTLD_LAZY);
-    if (!Handle) 
-    {
-        printf("Cannot open library: %s\n", dlerror());
-        return 1;
-    }
-
-    typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
-
-    dlerror();  // reset dl errors
-    GameUpdateAndRender_t GameUpdateAndRender = (GameUpdateAndRender_t) dlsym(Handle, "GameUpdateAndRender");
-
-    const char *DlSymError = dlerror();
-    if (DlSymError) 
-    {
-        printf("Cannot load symbol 'GameUpdateAndRender_t': %s \n", DlSymError);
-        dlclose(Handle);
-        return 1;
-    }
-
-    // ENDREGION - Load Game Library code!
+    game_code GameCode = {};
+    GameCode.LibPath = "../build/libhitman.so";
 
     // REGION - Platform using SDL
-    u_int32_t SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+    uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
     if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
-        return 1;
+        return EXIT_FAILURE;
     }
     
 #if HITMAN_DEBUG
-    u_int64_t PerfCountFrequency = SDL_GetPerformanceFrequency();
+    uint64 PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
-    int WindowWidth = 1280;
-    int WindowHeight = 1024;
-    u_int32_t WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-    Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WindowWidth, WindowHeight, WindowFlags);
+    local_persist SDL_setup SdlSetup = {};
 
-    SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+    window_dimensions Dimensions = { 1280, 1024 };
+    SetupSdl(&SdlSetup, Dimensions);
 
     OpenInputControllers();
 
     int GameUpdateHz = 30;
     double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
-    if (GetWindowRefreshRate(Window) !=  GameUpdateHz) 
+    int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
+    if (DetectedFrameRate != GameUpdateHz) 
     {
-        printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", GetWindowRefreshRate(Window), GameUpdateHz);
+        printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", DetectedFrameRate, GameUpdateHz);
     }
 
-    // REGION: setup offscreen buffer
-
     offscreen_buffer Buffer = {};
-    Buffer.BytesPerPixel = sizeof(u_int32_t);
+    Buffer.BytesPerPixel = sizeof(uint32);
     // Initial sizing of the game screen.
-    window_dimensions Dimensions = GetWindowDimensions(Window);
-    UpdateOffscreenBufferDimensions(Renderer, &Buffer, Dimensions);
-    
-    // ENDREGION: setup offscreen buffer
+    UpdateOffscreenBufferDimensions(&SdlSetup, &Buffer, Dimensions);
 
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
     game_input *NewInput = &Input[1];
 
-    u_int64_t LastCounter = SDL_GetPerformanceCounter(); 
+    uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
-    u_int64_t LastCycleCount = _rdtsc();
+    uint64 LastCycleCount = _rdtsc();
 #endif
 
     SDL_Event e;
@@ -321,7 +404,7 @@ int main(int argc, char *argv[])
         game_controller_input *OldKeyboardController = GetControllerForIndex(OldInput, 0);
         game_controller_input *NewKeyboardController = GetControllerForIndex(NewInput, 0);
         *NewKeyboardController = {};
-        for(int ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+        for(uint64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
         {
             NewKeyboardController->Buttons[ButtonIndex].IsDown =
             OldKeyboardController->Buttons[ButtonIndex].IsDown;
@@ -332,7 +415,7 @@ int main(int argc, char *argv[])
             switch (e.type) {
                 case SDL_WINDOWEVENT: 
                 {
-                    HandleWindowEvent(e.window, Renderer, &Buffer);
+                    HandleWindowEvent(e.window, &SdlSetup, &Buffer);
                 } break;
 
                 case SDL_QUIT:
@@ -349,11 +432,14 @@ int main(int argc, char *argv[])
             }
         }
 
-        // REGION: Process Controller Input
         HandleControllerEvents(OldInput, NewInput);
-        // ENDREGION: Process Controller Input
 
-        GameUpdateAndRender(&Buffer, NewInput);
+        if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) {
+            printf("GameCode has changed, reloading!\n");
+            LoadGameCode(&GameCode);
+        }
+
+        GameCode.GameUpdateAndRender(&Buffer, NewInput);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
@@ -365,16 +451,16 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG
         // Get this before UpdateWindow() so that we don't keep missing VBlanks.
-        u_int64_t EndCounter = SDL_GetPerformanceCounter();
+        uint64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
-        UpdateWindow(WindowTexture, &Buffer,  Renderer);
+        UpdateWindow(SdlSetup.WindowTexture, &Buffer,  SdlSetup.Renderer);
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.
-        u_int64_t EndCycleCount = _rdtsc();
-        u_int64_t CounterElapsed = EndCounter - LastCounter;
-        u_int64_t CyclesElapsed = EndCycleCount - LastCycleCount;
+        uint64 EndCycleCount = _rdtsc();
+        int64 CounterElapsed = EndCounter - LastCounter;
+        uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
 
         double MSPerFrame = (((1000.0f * (double)CounterElapsed) / (double)PerfCountFrequency));
         double FPS = (double)PerfCountFrequency / (double)CounterElapsed;
@@ -389,38 +475,7 @@ int main(int argc, char *argv[])
 
     // ENDREGION - Platform using SDL
 
-    if (Handle) 
-    {
-        printf("Closing library\n");
-        dlclose(Handle);
-    }
-
-    printf("Quiting SDL\n");
-    if (WindowTexture) 
-    {
-        SDL_DestroyTexture(WindowTexture);
-        WindowTexture = NULL;
-    }
-    if (Renderer) 
-    {
-        SDL_DestroyRenderer(Renderer);
-        Renderer = NULL;
-    }
-    if (Window) 
-    {
-        SDL_DestroyWindow(Window);
-	    Window = NULL;
-    }
-    for (int i = 0; i < ArrayCount(ControllerHandles); ++i) 
-    {
-        if (ControllerHandles[i]) 
-        {
-            SDL_GameControllerClose(ControllerHandles[i]);
-            ControllerHandles[i] = NULL;
-        }
-    }
-
-	SDL_Quit();
+    CloseGame(&GameCode, &SdlSetup);
  
-    return 0;
+    return EXIT_SUCCESS;
 }
