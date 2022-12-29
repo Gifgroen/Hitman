@@ -301,7 +301,7 @@ internal int LoadGameCode(game_code *GameCode)
     return 0;
 }
 
-internal void SetupSdl(SDL_setup *Setup, window_dimensions Dimensions) 
+internal void SdlSetupWindow(SDL_setup *Setup, window_dimensions Dimensions) 
 {
     uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
@@ -343,7 +343,66 @@ internal void CloseGame(game_code *GameCode, SDL_setup *Setup)
         }
     }
 
+    SDL_CloseAudio();
+
     SDL_Quit();
+}
+
+struct sdl_audio_ring_buffer
+{
+    int Size;
+    int WriteCursor;
+    int PlayCursor;
+    void *Data;
+};
+
+sdl_audio_ring_buffer AudioRingBuffer;
+
+internal void
+SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
+{
+    sdl_audio_ring_buffer *RingBuffer = (sdl_audio_ring_buffer *)UserData;
+
+    int Region1Size = Length;
+    int Region2Size = 0;
+    if (RingBuffer->PlayCursor + Length > RingBuffer->Size)
+    {
+        Region1Size = RingBuffer->Size - RingBuffer->PlayCursor;
+        Region2Size = Length - Region1Size;
+    }
+    memcpy(AudioData, (uint8*)(RingBuffer->Data) + RingBuffer->PlayCursor, Region1Size);
+    memcpy(&AudioData[Region1Size], RingBuffer->Data, Region2Size);
+    RingBuffer->PlayCursor = (RingBuffer->PlayCursor + Length) % RingBuffer->Size;
+    RingBuffer->WriteCursor = (RingBuffer->PlayCursor + 2048) % RingBuffer->Size;
+}
+
+internal void
+SDLInitAudio(int32 SamplesPerSecond, int32 BufferSize)
+{
+    SDL_AudioSpec AudioSettings = {0};
+
+    AudioSettings.freq = SamplesPerSecond;
+    AudioSettings.format = AUDIO_S16LSB;
+    AudioSettings.channels = 2;
+    AudioSettings.samples = 1024;
+    AudioSettings.callback = &SDLAudioCallback;
+    AudioSettings.userdata = &AudioRingBuffer;
+
+    AudioRingBuffer.Size = BufferSize;
+    AudioRingBuffer.Data = malloc(BufferSize);
+    AudioRingBuffer.PlayCursor = AudioRingBuffer.WriteCursor = 0;
+
+    SDL_OpenAudio(&AudioSettings, 0);
+
+    printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
+           AudioSettings.freq, AudioSettings.channels, AudioSettings.samples);
+
+    if (AudioSettings.format != AUDIO_S16LSB)
+    {
+        printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
+        SDL_CloseAudio();
+    }
+
 }
 
 int main(int argc, char *argv[]) 
@@ -356,7 +415,7 @@ int main(int argc, char *argv[])
     GameCode.LibPath = "../build/libhitman.so";
 
     // REGION - Platform using SDL
-    uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+    uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER;
     if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
@@ -370,7 +429,20 @@ int main(int argc, char *argv[])
     local_persist SDL_setup SdlSetup = {};
 
     window_dimensions Dimensions = { 1280, 1024 };
-    SetupSdl(&SdlSetup, Dimensions);
+    SdlSetupWindow(&SdlSetup, Dimensions);
+
+    // NOTE: Sound test
+    int SamplesPerSecond = 48000;
+    int ToneHz = 256;
+    int16 ToneVolume = 3000;
+    uint32 RunningSampleIndex = 0;
+    int SquareWavePeriod = SamplesPerSecond / ToneHz;
+    int HalfSquareWavePeriod = SquareWavePeriod / 2;
+    int BytesPerSample = sizeof(int16) * 2;
+    int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
+
+    SDLInitAudio(SamplesPerSecond, SecondaryBufferSize);
+    bool SoundIsPlaying = false;
 
     OpenInputControllers();
 
@@ -440,6 +512,63 @@ int main(int argc, char *argv[])
         }
 
         GameCode.GameUpdateAndRender(&Buffer, NewInput);
+
+        // REGION: Write Audio to Ringbuffer
+
+        // Sound output test
+        SDL_LockAudio();
+        int ByteToLock = RunningSampleIndex*BytesPerSample % SecondaryBufferSize;
+        int BytesToWrite;
+        if(ByteToLock == AudioRingBuffer.PlayCursor)
+        {
+            BytesToWrite = SecondaryBufferSize;
+        }
+        else if(ByteToLock > AudioRingBuffer.PlayCursor)
+        {
+            BytesToWrite = (SecondaryBufferSize - ByteToLock);
+            BytesToWrite += AudioRingBuffer.PlayCursor;
+        }
+        else
+        {
+            BytesToWrite = AudioRingBuffer.PlayCursor - ByteToLock;
+        }
+
+        // TODO(casey): More strenuous test!
+        // TODO(casey): Switch to a sine wave
+        void *Region1 = (uint8*)AudioRingBuffer.Data + ByteToLock;
+        int Region1Size = BytesToWrite;
+        if (Region1Size + ByteToLock > SecondaryBufferSize) 
+        {
+            Region1Size = SecondaryBufferSize - ByteToLock;
+        }
+        void *Region2 = AudioRingBuffer.Data;
+        int Region2Size = BytesToWrite - Region1Size;
+        SDL_UnlockAudio();
+        int Region1SampleCount = Region1Size/BytesPerSample;
+        int16 *SampleOut = (int16 *)Region1;
+        for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
+        {
+            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
+            *SampleOut++ = SampleValue;
+            *SampleOut++ = SampleValue;
+        }
+
+        int Region2SampleCount = Region2Size/BytesPerSample;
+        SampleOut = (int16 *)Region2;
+        for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
+        {
+            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
+            *SampleOut++ = SampleValue;
+            *SampleOut++ = SampleValue;
+        }
+
+        if(!SoundIsPlaying)
+        {
+            SDL_PauseAudio(0);
+            SoundIsPlaying = true;
+        }
+
+        // END REGION: Write Audio to Ringbuffer
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
