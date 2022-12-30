@@ -11,7 +11,8 @@
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
-struct sdl_setup {
+struct sdl_setup 
+{
     SDL_Window *Window;
     SDL_Renderer *Renderer;
     SDL_Texture *WindowTexture = NULL;
@@ -38,7 +39,6 @@ struct sdl_audio_ring_buffer
     int PlayCursor;
     void *Data;
 };
-
 
 typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
 

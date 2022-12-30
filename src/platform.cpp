@@ -120,7 +120,8 @@ internal real32 GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
     return ((real32)(CurrentCounter - OldCounter) / (real32)(SDL_GetPerformanceFrequency()));
 }
 
-internal game_controller_input *GetControllerForIndex(game_input *Input, int Index) {
+internal game_controller_input *GetControllerForIndex(game_input *Input, int Index) 
+{
     game_controller_input *Result = &(Input->Controllers[Index]);
     return Result;
 }
@@ -510,7 +511,8 @@ int main(int argc, char *argv[])
 
         while(SDL_PollEvent(&e) != 0)
         {
-            switch (e.type) {
+            switch (e.type) 
+            {
                 case SDL_WINDOWEVENT: 
                 {
                     HandleWindowEvent(e.window, &SdlSetup, &OffscreenBuffer);
@@ -526,13 +528,13 @@ int main(int argc, char *argv[])
                 {
                     HandleKeyEvent(e.key, NewKeyboardController);
                 } break;
-
             }
         }
 
         HandleControllerEvents(OldInput, NewInput);
 
-        if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) {
+        if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) 
+        {
             printf("GameCode has changed, reloading!\n");
             LoadGameCode(&GameCode);
         }
