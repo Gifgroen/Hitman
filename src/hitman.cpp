@@ -4,7 +4,7 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
 {
     local_persist real32 tSine;
     int16 ToneVolume = 3000;
-    int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
+    int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
 
     int16 *SampleOut = SoundBuffer->Samples;
     for(int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
@@ -18,7 +18,7 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
     }
 }
 
-void RenderWeirdGradient(offscreen_buffer *Buffer, game_input *Input) 
+void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_input *Input) 
 {
     window_dimensions Dim = Buffer->Dimensions;
 
@@ -48,7 +48,7 @@ void RenderWeirdGradient(offscreen_buffer *Buffer, game_input *Input)
     }
 }
 
-extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
+extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
 {
     RenderWeirdGradient(Buffer, Input);
     GameOutputSound(SoundBuffer, ToneHz);

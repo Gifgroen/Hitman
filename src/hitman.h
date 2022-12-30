@@ -14,7 +14,7 @@ struct window_dimensions
     int Height;
 };
 
-struct offscreen_buffer 
+struct game_offscreen_buffer 
 {
     window_dimensions Dimensions;
     void *Pixels;

@@ -22,7 +22,7 @@ global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 
 global bool Running = true;
 
-internal void Alloc(offscreen_buffer *Buffer) 
+internal void Alloc(game_offscreen_buffer *Buffer) 
 {
     window_dimensions Dim = Buffer->Dimensions;
     int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
@@ -33,7 +33,7 @@ internal void Alloc(offscreen_buffer *Buffer)
 #endif
 }
 
-internal void Dealloc(offscreen_buffer *Buffer) 
+internal void Dealloc(game_offscreen_buffer *Buffer) 
 {
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     bool Result = VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
@@ -45,7 +45,7 @@ internal void Dealloc(offscreen_buffer *Buffer)
 #endif
 }
 
-internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
+internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
     if (Setup->WindowTexture) 
     {
@@ -73,7 +73,7 @@ internal window_dimensions GetWindowDimensions(SDL_Window *Window)
     return Result;
 }
 
-internal void UpdateWindow(SDL_Texture *WindowTexture, offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
+internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
     SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Dimensions.Width * Buffer->BytesPerPixel);
     SDL_RenderCopy(Renderer, WindowTexture, 0, 0);
@@ -125,7 +125,7 @@ internal game_controller_input *GetControllerForIndex(game_input *Input, int Ind
     return Result;
 }
 
-internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, offscreen_buffer *Buffer) 
+internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, game_offscreen_buffer *Buffer) 
 {
     switch(e.event)
     {
@@ -480,7 +480,7 @@ int main(int argc, char *argv[])
 
     OpenInputControllers();
 
-    offscreen_buffer OffscreenBuffer = {};
+    game_offscreen_buffer OffscreenBuffer = {};
     OffscreenBuffer.BytesPerPixel = sizeof(uint32);
     // Initial sizing of the game screen.
     UpdateOffscreenBufferDimensions(&SdlSetup, &OffscreenBuffer, Dimensions);
@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
 
         SDL_UnlockAudio();
 
-        offscreen_buffer Buffer = {};
+        game_offscreen_buffer Buffer = {};
         Buffer.Pixels = OffscreenBuffer.Pixels;
         Buffer.Dimensions = OffscreenBuffer.Dimensions;
         Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;

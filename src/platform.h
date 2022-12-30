@@ -40,7 +40,7 @@ struct sdl_audio_ring_buffer
 };
 
 
-typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
+typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
 
 struct game_code
 {
