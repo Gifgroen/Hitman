@@ -19,6 +19,7 @@
 #include "platform.h"
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
+global sdl_audio_ring_buffer AudioRingBuffer;
 
 global bool Running = true;
 
@@ -348,9 +349,6 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup)
 
     SDL_Quit();
 }
-
-
-sdl_audio_ring_buffer AudioRingBuffer;
 
 internal void SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
 {
