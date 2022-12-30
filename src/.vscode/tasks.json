@@ -4,7 +4,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Game for MacOS",
+            "label": "Build Hitman (Game)",
             "type": "shell",
             "osx": {
                 "command": "sh build.macos.sh",
