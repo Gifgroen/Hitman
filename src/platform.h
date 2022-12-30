@@ -11,13 +11,36 @@
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
-struct SDL_setup {
+struct sdl_setup {
     SDL_Window *Window;
     SDL_Renderer *Renderer;
     SDL_Texture *WindowTexture = NULL;
 };
 
-typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_input*);
+struct sdl_sound_output
+{
+    int SamplesPerSecond;
+    int ToneHz;
+    int16 ToneVolume;
+    uint32 RunningSampleIndex;
+    int WavePeriod;
+    int BytesPerSample;
+    int SecondaryBufferSize;
+
+    real32 tSine;
+    int LatencySampleCount;
+};
+
+struct sdl_audio_ring_buffer
+{
+    int Size;
+    int WriteCursor;
+    int PlayCursor;
+    void *Data;
+};
+
+
+typedef void (*GameUpdateAndRender_t)(offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
 
 struct game_code
 {

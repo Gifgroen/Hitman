@@ -2,6 +2,7 @@
 #define HITMAN_H
 
 #include <stdio.h>
+#include <math.h>
 
 #include "hitman_defines.h"
 
@@ -18,6 +19,13 @@ struct offscreen_buffer
     window_dimensions Dimensions;
     void *Pixels;
     int BytesPerPixel;
+};
+
+struct game_sound_output_buffer
+{
+    int SamplesPerSecond;
+    int SampleCount;
+    int16 *Samples;
 };
 
 struct game_button_state 

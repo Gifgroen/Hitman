@@ -1,6 +1,24 @@
 #include "hitman.h"
 
-extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer, game_input *Input) 
+void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
+{
+    local_persist real32 tSine;
+    int16 ToneVolume = 3000;
+    int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
+
+    int16 *SampleOut = SoundBuffer->Samples;
+    for(int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
+    {
+        real32 SineValue = sinf(tSine);
+        int16 SampleValue = (int16)(SineValue * ToneVolume);
+        *SampleOut++ = SampleValue;
+        *SampleOut++ = SampleValue;
+
+        tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
+    }
+}
+
+void RenderWeirdGradient(offscreen_buffer *Buffer, game_input *Input) 
 {
     window_dimensions Dim = Buffer->Dimensions;
 
@@ -28,4 +46,10 @@ extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer, game_input *Input)
         }
         Row += Pitch;
     }
+}
+
+extern "C" void GameUpdateAndRender(offscreen_buffer *Buffer, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
+{
+    RenderWeirdGradient(Buffer, Input);
+    GameOutputSound(SoundBuffer, ToneHz);
 }

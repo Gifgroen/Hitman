@@ -45,7 +45,7 @@ internal void Dealloc(offscreen_buffer *Buffer)
 #endif
 }
 
-internal void UpdateOffscreenBufferDimensions(SDL_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
+internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
     if (Setup->WindowTexture) 
     {
@@ -115,9 +115,9 @@ internal void OpenInputControllers()
     }
 }
 
-internal float GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
+internal real32 GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
 {
-    return ((float)(CurrentCounter - OldCounter) / (float)(SDL_GetPerformanceFrequency()));
+    return ((real32)(CurrentCounter - OldCounter) / (real32)(SDL_GetPerformanceFrequency()));
 }
 
 internal game_controller_input *GetControllerForIndex(game_input *Input, int Index) {
@@ -125,7 +125,7 @@ internal game_controller_input *GetControllerForIndex(game_input *Input, int Ind
     return Result;
 }
 
-internal void HandleWindowEvent(SDL_WindowEvent e, SDL_setup *Setup, offscreen_buffer *Buffer) 
+internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, offscreen_buffer *Buffer) 
 {
     switch(e.event)
     {
@@ -241,7 +241,7 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-internal void TryWaitForNextFrame(uint64 LastCounter, double TargetSecondsPerFrame) 
+internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFrame) 
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
@@ -301,7 +301,7 @@ internal int LoadGameCode(game_code *GameCode)
     return 0;
 }
 
-internal void SdlSetupWindow(SDL_setup *Setup, window_dimensions Dimensions) 
+internal void SdlSetupWindow(sdl_setup *Setup, window_dimensions Dimensions) 
 {
     uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
@@ -311,7 +311,7 @@ internal void SdlSetupWindow(SDL_setup *Setup, window_dimensions Dimensions)
     Assert(Setup->Renderer);
 }
 
-internal void CloseGame(game_code *GameCode, SDL_setup *Setup) 
+internal void CloseGame(game_code *GameCode, sdl_setup *Setup) 
 {
     if (GameCode->LibHandle) 
     {
@@ -348,18 +348,10 @@ internal void CloseGame(game_code *GameCode, SDL_setup *Setup)
     SDL_Quit();
 }
 
-struct sdl_audio_ring_buffer
-{
-    int Size;
-    int WriteCursor;
-    int PlayCursor;
-    void *Data;
-};
 
 sdl_audio_ring_buffer AudioRingBuffer;
 
-internal void
-SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
+internal void SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
 {
     sdl_audio_ring_buffer *RingBuffer = (sdl_audio_ring_buffer *)UserData;
 
@@ -376,8 +368,7 @@ SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
     RingBuffer->WriteCursor = (RingBuffer->PlayCursor + 2048) % RingBuffer->Size;
 }
 
-internal void
-SDLInitAudio(int32 SamplesPerSecond, int32 BufferSize)
+internal void InitAudio(int32 SamplesPerSecond, int32 BufferSize)
 {
     SDL_AudioSpec AudioSettings = {0};
 
@@ -394,15 +385,46 @@ SDLInitAudio(int32 SamplesPerSecond, int32 BufferSize)
 
     SDL_OpenAudio(&AudioSettings, 0);
 
-    printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
-           AudioSettings.freq, AudioSettings.channels, AudioSettings.samples);
+    printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n", AudioSettings.freq, AudioSettings.channels, AudioSettings.samples);
 
     if (AudioSettings.format != AUDIO_S16LSB)
     {
         printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
         SDL_CloseAudio();
     }
+}
 
+internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int BytesToWrite, game_sound_output_buffer *SoundBuffer)
+{
+    int16 *Samples = SoundBuffer->Samples;
+
+    void *Region1 = (uint8 *)AudioRingBuffer.Data + ByteToLock;
+    int Region1Size = BytesToWrite;
+    if (Region1Size + ByteToLock > SoundOutput->SecondaryBufferSize)
+    {
+        Region1Size = SoundOutput->SecondaryBufferSize - ByteToLock;
+    }
+    void *Region2 = AudioRingBuffer.Data;
+    int Region2Size = BytesToWrite - Region1Size;
+    int Region1SampleCount = Region1Size / SoundOutput->BytesPerSample;
+    int16 *SampleOut = (int16 *)Region1;
+    for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
+    {
+        *SampleOut++ = *Samples++;
+        *SampleOut++ = *Samples++;
+
+        ++SoundOutput->RunningSampleIndex;
+    }
+
+    int Region2SampleCount = Region2Size / SoundOutput->BytesPerSample;
+    SampleOut = (int16 *)Region2;
+    for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
+    {
+        *SampleOut++ = *Samples++;
+        *SampleOut++ = *Samples++;
+
+        ++SoundOutput->RunningSampleIndex;
+    }
 }
 
 int main(int argc, char *argv[]) 
@@ -413,6 +435,7 @@ int main(int argc, char *argv[])
 
     game_code GameCode = {};
     GameCode.LibPath = "../build/libhitman.so";
+    LoadGameCode(&GameCode);
 
     // REGION - Platform using SDL
     uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER;
@@ -426,38 +449,41 @@ int main(int argc, char *argv[])
     uint64 PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
-    local_persist SDL_setup SdlSetup = {};
+    local_persist sdl_setup SdlSetup = {};
 
     window_dimensions Dimensions = { 1280, 1024 };
     SdlSetupWindow(&SdlSetup, Dimensions);
 
-    // NOTE: Sound test
-    int SamplesPerSecond = 48000;
-    int ToneHz = 256;
-    int16 ToneVolume = 3000;
-    uint32 RunningSampleIndex = 0;
-    int SquareWavePeriod = SamplesPerSecond / ToneHz;
-    int HalfSquareWavePeriod = SquareWavePeriod / 2;
-    int BytesPerSample = sizeof(int16) * 2;
-    int SecondaryBufferSize = SamplesPerSecond * BytesPerSample;
-
-    SDLInitAudio(SamplesPerSecond, SecondaryBufferSize);
-    bool SoundIsPlaying = false;
-
-    OpenInputControllers();
-
     int GameUpdateHz = 30;
-    double TargetSecondsPerFrame = 1.0f / (double)GameUpdateHz;
+    real64 TargetSecondsPerFrame = 1.0f / (real64)GameUpdateHz;
+    
     int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
     if (DetectedFrameRate != GameUpdateHz) 
     {
         printf("Device capable refresh rate is %d Hz, but Game runs in %d Hz\n", DetectedFrameRate, GameUpdateHz);
     }
 
-    offscreen_buffer Buffer = {};
-    Buffer.BytesPerPixel = sizeof(uint32);
+    sdl_sound_output SoundOutput = {};
+    SoundOutput.SamplesPerSecond = 48000;
+    SoundOutput.ToneHz = 256;
+    SoundOutput.ToneVolume = 3000;
+    SoundOutput.RunningSampleIndex = 0;
+    SoundOutput.WavePeriod = SoundOutput.SamplesPerSecond / SoundOutput.ToneHz;
+    SoundOutput.BytesPerSample = sizeof(int16) * 2;
+    SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
+    SoundOutput.tSine = 0.0f;
+    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / (0.25 * GameUpdateHz);
+
+    InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
+    int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
+    bool SoundIsPlaying = false;
+
+    OpenInputControllers();
+
+    offscreen_buffer OffscreenBuffer = {};
+    OffscreenBuffer.BytesPerPixel = sizeof(uint32);
     // Initial sizing of the game screen.
-    UpdateOffscreenBufferDimensions(&SdlSetup, &Buffer, Dimensions);
+    UpdateOffscreenBufferDimensions(&SdlSetup, &OffscreenBuffer, Dimensions);
 
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
@@ -487,7 +513,7 @@ int main(int argc, char *argv[])
             switch (e.type) {
                 case SDL_WINDOWEVENT: 
                 {
-                    HandleWindowEvent(e.window, &SdlSetup, &Buffer);
+                    HandleWindowEvent(e.window, &SdlSetup, &OffscreenBuffer);
                 } break;
 
                 case SDL_QUIT:
@@ -511,63 +537,43 @@ int main(int argc, char *argv[])
             LoadGameCode(&GameCode);
         }
 
-        GameCode.GameUpdateAndRender(&Buffer, NewInput);
-
         // REGION: Write Audio to Ringbuffer
 
-        // Sound output test
         SDL_LockAudio();
-        int ByteToLock = RunningSampleIndex*BytesPerSample % SecondaryBufferSize;
+        int ByteToLock = (SoundOutput.RunningSampleIndex*SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
+        int TargetCursor = ((AudioRingBuffer.PlayCursor + (SoundOutput.LatencySampleCount*SoundOutput.BytesPerSample)) % SoundOutput.SecondaryBufferSize);
         int BytesToWrite;
-        if(ByteToLock == AudioRingBuffer.PlayCursor)
+        if(ByteToLock > TargetCursor)
         {
-            BytesToWrite = SecondaryBufferSize;
-        }
-        else if(ByteToLock > AudioRingBuffer.PlayCursor)
-        {
-            BytesToWrite = (SecondaryBufferSize - ByteToLock);
-            BytesToWrite += AudioRingBuffer.PlayCursor;
+            BytesToWrite = (SoundOutput.SecondaryBufferSize - ByteToLock);
+            BytesToWrite += TargetCursor;
         }
         else
         {
-            BytesToWrite = AudioRingBuffer.PlayCursor - ByteToLock;
+            BytesToWrite = TargetCursor - ByteToLock;
         }
 
-        // TODO(casey): More strenuous test!
-        // TODO(casey): Switch to a sine wave
-        void *Region1 = (uint8*)AudioRingBuffer.Data + ByteToLock;
-        int Region1Size = BytesToWrite;
-        if (Region1Size + ByteToLock > SecondaryBufferSize) 
-        {
-            Region1Size = SecondaryBufferSize - ByteToLock;
-        }
-        void *Region2 = AudioRingBuffer.Data;
-        int Region2Size = BytesToWrite - Region1Size;
         SDL_UnlockAudio();
-        int Region1SampleCount = Region1Size/BytesPerSample;
-        int16 *SampleOut = (int16 *)Region1;
-        for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
-        {
-            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
-            *SampleOut++ = SampleValue;
-            *SampleOut++ = SampleValue;
-        }
 
-        int Region2SampleCount = Region2Size/BytesPerSample;
-        SampleOut = (int16 *)Region2;
-        for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
-        {
-            int16 SampleValue = ((RunningSampleIndex++ / HalfSquareWavePeriod) % 2) ? ToneVolume : -ToneVolume;
-            *SampleOut++ = SampleValue;
-            *SampleOut++ = SampleValue;
-        }
+        offscreen_buffer Buffer = {};
+        Buffer.Pixels = OffscreenBuffer.Pixels;
+        Buffer.Dimensions = OffscreenBuffer.Dimensions;
+        Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;
+
+        game_sound_output_buffer SoundBuffer = {};
+        SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
+        SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
+        SoundBuffer.Samples = Samples;
+
+        GameCode.GameUpdateAndRender(&Buffer, &SoundBuffer, NewInput, SoundOutput.ToneHz);
+
+        FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer); 
 
         if(!SoundIsPlaying)
         {
             SDL_PauseAudio(0);
             SoundIsPlaying = true;
         }
-
         // END REGION: Write Audio to Ringbuffer
 
         game_input *Temp = NewInput;
@@ -583,7 +589,7 @@ int main(int argc, char *argv[])
         uint64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
-        UpdateWindow(SdlSetup.WindowTexture, &Buffer,  SdlSetup.Renderer);
+        UpdateWindow(SdlSetup.WindowTexture, &OffscreenBuffer,  SdlSetup.Renderer);
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.
@@ -591,9 +597,9 @@ int main(int argc, char *argv[])
         int64 CounterElapsed = EndCounter - LastCounter;
         uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
 
-        double MSPerFrame = (((1000.0f * (double)CounterElapsed) / (double)PerfCountFrequency));
-        double FPS = (double)PerfCountFrequency / (double)CounterElapsed;
-        double MCPF = ((double)CyclesElapsed / (1000.0f * 1000.0f));
+        real64 MSPerFrame = (((1000.0f * (real64)CounterElapsed) / (real64)PerfCountFrequency));
+        real64 FPS = (real64)PerfCountFrequency / (real64)CounterElapsed;
+        real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
 
         printf("%.02fms/f, %.02f/s, %.02fmc/f\n", MSPerFrame, FPS, MCPF);
 
