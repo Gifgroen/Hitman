@@ -12,6 +12,6 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
-        // TODO: configure 
+        // TODO: configure for Windows/Linux
     ]
 }
