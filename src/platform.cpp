@@ -247,7 +247,7 @@ internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFra
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
-        int32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 3;
+        int32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 1;
         if (TimeToSleep > 0)
         {
             SDL_Delay(TimeToSleep);
@@ -471,7 +471,7 @@ int main(int argc, char *argv[])
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
     SoundOutput.tSine = 0.0f;
-    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / (0.25 * GameUpdateHz);
+    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / GameUpdateHz;
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
@@ -575,6 +575,8 @@ int main(int argc, char *argv[])
             SoundIsPlaying = true;
         }
         // END REGION: Write Audio to Ringbuffer
+
+        // TODO: print -> PC BTL WC BTW
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
