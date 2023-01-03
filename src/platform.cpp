@@ -508,6 +508,7 @@ int main(int argc, char *argv[])
     SdlSetupWindow(&SdlSetup, Dimensions);
 
     int const GameUpdateHz = 30;
+    int const FramesOfAudioLatency = 3;
     real64 TargetSecondsPerFrame = 1.0f / (real64)GameUpdateHz;
     
     int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
@@ -525,7 +526,7 @@ int main(int argc, char *argv[])
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
     SoundOutput.tSine = 0.0f;
-    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
+    SoundOutput.LatencySampleCount = FramesOfAudioLatency * (SoundOutput.SamplesPerSecond / GameUpdateHz);
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
@@ -635,9 +636,8 @@ int main(int argc, char *argv[])
         }
         // END REGION: Write Audio to Ringbuffer
 
-        // TODO: print -> PC BTL WC BTW
-
-        printf("PC: %d, BTL: %d, WC: %d, BTW: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite);
+        int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
+        printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
