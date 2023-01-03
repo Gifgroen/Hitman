@@ -40,6 +40,12 @@ struct sdl_audio_ring_buffer
     void *Data;
 };
 
+struct sdl_debug_time_marker 
+{
+    int PlayCursor;
+    int WriteCursor;
+};
+
 typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
 
 struct game_code

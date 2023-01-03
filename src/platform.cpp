@@ -74,6 +74,57 @@ internal window_dimensions GetWindowDimensions(SDL_Window *Window)
     return Result;
 }
 
+internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, uint32 Color)
+{
+    int Pitch = Buffer->BytesPerPixel * Buffer->Dimensions.Width;
+    uint8 *Pixel = ((uint8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
+    for(int Y = Top; Y < Bottom; ++Y)
+    {
+        *(uint32 *)Pixel = Color;
+        Pixel += Pitch;
+    }
+}
+
+inline void SDLDrawSoundBufferMarker(
+    game_offscreen_buffer *Buffer,
+    sdl_sound_output *SoundOutput,
+    real32 C, 
+    int PadX, 
+    int Top, 
+    int Bottom,
+    int Value, 
+    uint32 Color
+) {
+    Assert(Value < SoundOutput->SecondaryBufferSize);
+    real32 XReal32 = (C * (real32)Value);
+    int X = PadX + (int)XReal32;
+    SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
+}
+internal void SDLDebugSyncDisplay(
+    game_offscreen_buffer *Buffer, 
+    int DebugTimeMarkerCount, 
+    sdl_debug_time_marker *DebugTimeMarkers, 
+    sdl_sound_output *SoundOutput, 
+    real64 TargetSecondsPerFrame
+) {
+    int PadX = 16;
+    int PadY = 16;
+
+    window_dimensions Dimensions = Buffer->Dimensions;
+    int Width = Dimensions.Width;
+    real32 PixelsPerByte = (real32)(Width - (2 * PadX)) / (real32)SoundOutput->SecondaryBufferSize;
+
+    int Top = PadY;
+    int Bottom = Dimensions.Height - PadY;
+
+    for (int MarkerIndex = 0; MarkerIndex < DebugTimeMarkerCount; ++MarkerIndex)
+    {
+        sdl_debug_time_marker *Marker = &DebugTimeMarkers[MarkerIndex];
+        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->PlayCursor, 0xFFFFFFFF);
+        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->WriteCursor, 0xFFFF0000);
+    }
+}
+
 internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
     SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Dimensions.Width * Buffer->BytesPerPixel);
@@ -253,7 +304,10 @@ internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFra
             SDL_Delay(TimeToSleep);
         }
 
-        Assert(GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame);
+        if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) >= TargetSecondsPerFrame) 
+        {
+            printf("Frame time %02f was more then our target\n", GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()));
+        }
         while (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
         {
             // Waiting...
@@ -364,7 +418,7 @@ internal void SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
     memcpy(AudioData, (uint8*)(RingBuffer->Data) + RingBuffer->PlayCursor, Region1Size);
     memcpy(&AudioData[Region1Size], RingBuffer->Data, Region2Size);
     RingBuffer->PlayCursor = (RingBuffer->PlayCursor + Length) % RingBuffer->Size;
-    RingBuffer->WriteCursor = (RingBuffer->PlayCursor + 2048) % RingBuffer->Size;
+    RingBuffer->WriteCursor = (RingBuffer->PlayCursor + Length) % RingBuffer->Size;
 }
 
 internal void InitAudio(int32 SamplesPerSecond, int32 BufferSize)
@@ -453,7 +507,7 @@ int main(int argc, char *argv[])
     window_dimensions Dimensions = { 1280, 1024 };
     SdlSetupWindow(&SdlSetup, Dimensions);
 
-    int GameUpdateHz = 30;
+    int const GameUpdateHz = 30;
     real64 TargetSecondsPerFrame = 1.0f / (real64)GameUpdateHz;
     
     int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
@@ -471,7 +525,7 @@ int main(int argc, char *argv[])
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
     SoundOutput.tSine = 0.0f;
-    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / GameUpdateHz;
+    SoundOutput.LatencySampleCount = SoundOutput.SamplesPerSecond / 15;
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
@@ -487,6 +541,11 @@ int main(int argc, char *argv[])
     game_input Input[2] = {};
     game_input *OldInput = &Input[0];
     game_input *NewInput = &Input[1];
+
+#if HITMAN_DEBUG
+    sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
+    int DebugLastPlayCursorIndex = 0;
+#endif
 
     uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
@@ -540,8 +599,8 @@ int main(int argc, char *argv[])
         // REGION: Write Audio to Ringbuffer
 
         SDL_LockAudio();
-        int ByteToLock = (SoundOutput.RunningSampleIndex*SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
-        int TargetCursor = ((AudioRingBuffer.PlayCursor + (SoundOutput.LatencySampleCount*SoundOutput.BytesPerSample)) % SoundOutput.SecondaryBufferSize);
+        int ByteToLock = (SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
+        int TargetCursor = ((AudioRingBuffer.PlayCursor + (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) % SoundOutput.SecondaryBufferSize);
         int BytesToWrite;
         if(ByteToLock > TargetCursor)
         {
@@ -578,6 +637,8 @@ int main(int argc, char *argv[])
 
         // TODO: print -> PC BTL WC BTW
 
+        printf("PC: %d, BTL: %d, WC: %d, BTW: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite);
+
         game_input *Temp = NewInput;
         NewInput = OldInput;
         OldInput = Temp;
@@ -591,7 +652,23 @@ int main(int argc, char *argv[])
         uint64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
+#if HITMAN_DEBUG
+        SDLDebugSyncDisplay(&OffscreenBuffer, ArrayCount(DebugTimeMarkers), DebugTimeMarkers, &SoundOutput, TargetSecondsPerFrame);
+#endif
+
         UpdateWindow(SdlSetup.WindowTexture, &OffscreenBuffer,  SdlSetup.Renderer);
+
+#ifdef HITMAN_DEBUG
+    {
+        sdl_debug_time_marker *marker = &DebugTimeMarkers[DebugLastPlayCursorIndex++];
+        if (DebugLastPlayCursorIndex >= ArrayCount(DebugTimeMarkers))
+        {
+            DebugLastPlayCursorIndex = 0;
+        }
+        marker->PlayCursor = AudioRingBuffer.PlayCursor;
+        marker->WriteCursor = AudioRingBuffer.WriteCursor;
+    }
+#endif
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.

@@ -13,8 +13,12 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
         int16 SampleValue = (int16)(SineValue * ToneVolume);
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
-
+    
         tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
+        if (tSine > 2.0f * Pi32) 
+        {
+            tSine -= 2.0f * Pi32;
+        }
     }
 }
 
@@ -24,13 +28,13 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_input *Input)
 
     int Pitch = Dim.Width * Buffer->BytesPerPixel;
 
-    for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
-    {
-        game_controller_input *Controller = &(Input->Controllers[i]);
-        int cHalfTransitionCount = Controller->MoveLeft.HalfTransitionCount;
-        bool cIsDown = Controller->MoveLeft.IsDown; 
-        printf("[Controller %d][Left Pressed]  HalfTransitionCount = %d, IsDown = %d\n", i, cHalfTransitionCount, cIsDown);
-    }
+    // for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
+    // {
+    //     game_controller_input *Controller = &(Input->Controllers[i]);
+    //     int cHalfTransitionCount = Controller->MoveLeft.HalfTransitionCount;
+    //     bool cIsDown = Controller->MoveLeft.IsDown; 
+    //     printf("[Controller %d][Left Pressed]  HalfTransitionCount = %d, IsDown = %d\n", i, cHalfTransitionCount, cIsDown);
+    // }
     
     uint8 *Row = (uint8 *)Buffer->Pixels;
     for(int Y = 0; Y < Dim.Height; ++Y)
