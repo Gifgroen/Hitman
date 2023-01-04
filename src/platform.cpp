@@ -612,7 +612,7 @@ int main(int argc, char *argv[])
     game_input *OldInput = &Input[0];
     game_input *NewInput = &Input[1];
 
-    game_state State = {};
+    game_state State = {0};
 
 #if HITMAN_DEBUG
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};

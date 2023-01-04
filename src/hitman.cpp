@@ -1,10 +1,10 @@
 #include "hitman.h"
 
-void GameOutputSound(game_sound_output_buffer *SoundBuffer, int ToneHz)
+void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)
 {
     local_persist real32 tSine;
     int16 ToneVolume = 3000;
-    int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
+    int WavePeriod = SoundBuffer->SamplesPerSecond / GameState->ToneHz;
 
     int16 *SampleOut = SoundBuffer->Samples;
     for(int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
@@ -27,21 +27,6 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_
     window_dimensions Dim = Buffer->Dimensions;
 
     int Pitch = Dim.Width * Buffer->BytesPerPixel;
-
-    for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
-    {
-        game_controller_input *Controller = &(Input->Controllers[i]);
-        
-        if (Controller->MoveLeft.IsDown) 
-        {
-            State->XOffset += 10;
-        }
-        if (Controller->MoveRight.IsDown)
-        {
-            State->XOffset -= 10;
-        }
-        
-    }
     
     uint8 *Row = (uint8 *)Buffer->Pixels;
     for(int Y = 0; Y < Dim.Height; ++Y)
@@ -59,8 +44,27 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_
     }
 }
 
-extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *State, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
+extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *GameState, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
 {
-    RenderWeirdGradient(Buffer, State, Input);
-    GameOutputSound(SoundBuffer, ToneHz);
+    for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
+    {
+        game_controller_input *Controller = &(Input->Controllers[i]);
+        
+        if (Controller->MoveLeft.IsDown) 
+        {
+            GameState->XOffset += 10;
+        }
+        if (Controller->MoveRight.IsDown)
+        {
+            GameState->XOffset -= 10;
+        }
+        real32 AverageY = Controller->StickAverageY;
+        if (AverageY != 0)
+        {
+            GameState->ToneHz = 256 + (int)(128.0f * AverageY);
+        }
+    }
+
+    RenderWeirdGradient(Buffer, GameState, Input);
+    GameOutputSound(SoundBuffer, GameState);
 }

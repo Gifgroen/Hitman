@@ -25,6 +25,8 @@ struct game_state
 {
     int XOffset;
     int YOffset;
+
+    int ToneHz;
 };
 
 struct game_sound_output_buffer
