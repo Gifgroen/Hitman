@@ -46,7 +46,7 @@ struct sdl_debug_time_marker
     int WriteCursor;
 };
 
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_sound_output_buffer*, game_input*, int);
+typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_state *, game_sound_output_buffer*, game_input*, int);
 
 struct game_code
 {
