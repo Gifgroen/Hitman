@@ -550,6 +550,38 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
+internal void DebugReadEntireFile(char const *Filename) 
+{
+    FILE * Fp = fopen (Filename, "r");
+    if (Fp == NULL) 
+    {
+        printf("File does not exists!\n");
+        return;
+    }
+
+    // TODO: make more flexible.
+    char CurrentLine[1024];
+    while (fgets(CurrentLine, sizeof(CurrentLine), Fp) != NULL) {
+        fprintf(stderr, "got line: %s", CurrentLine);
+    }
+    
+    fclose(Fp);
+}
+
+internal void DebugWriteEntireFile(char const *Filename, char const *Content, int Length) 
+{
+    FILE * Fp = fopen (Filename, "w");
+    if (Fp == NULL) 
+    {
+        printf("File does not exists!\n");
+        return;
+    }
+
+    // TODO: Define and write input content
+
+    fclose(Fp);
+}
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -615,11 +647,17 @@ int main(int argc, char *argv[])
 
     game_state State = {0};
 
+    // TEST
+    char const *Path = "../data/read.txt";
+    DebugReadEntireFile(Path);
+    char const *WritePath = "../data/write.txt";
+    char const *WriteContent = "Written to a file!";
+    DebugWriteEntireFile(WritePath, WriteContent, 42);
+
 #if HITMAN_DEBUG
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
     int DebugLastPlayCursorIndex = 0;
 #endif
-
     uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
@@ -708,8 +746,8 @@ int main(int argc, char *argv[])
         }
         // END REGION: Write Audio to Ringbuffer
 
-        int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
-        printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
+        // int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
+        // printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
