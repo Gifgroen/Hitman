@@ -100,6 +100,7 @@ inline void SDLDrawSoundBufferMarker(
     int X = PadX + (int)XReal32;
     SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
 }
+
 internal void SDLDebugSyncDisplay(
     game_offscreen_buffer *Buffer, 
     int DebugTimeMarkerCount, 
