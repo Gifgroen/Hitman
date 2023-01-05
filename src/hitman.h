@@ -13,11 +13,26 @@ struct window_dimensions
     int Height;
 };
 
-struct offscreen_buffer 
+struct game_offscreen_buffer 
 {
     window_dimensions Dimensions;
     void *Pixels;
     int BytesPerPixel;
+};
+
+struct game_state 
+{
+    int XOffset;
+    int YOffset;
+
+    int ToneHz;
+};
+
+struct game_sound_output_buffer
+{
+    int SamplesPerSecond;
+    int SampleCount;
+    int16 *Samples;
 };
 
 struct game_button_state 
@@ -28,15 +43,28 @@ struct game_button_state
 
 struct game_controller_input 
 {
+    bool IsConnected;
+    bool IsAnalog;
+    real32 StickAverageX;
+    real32 StickAverageY;
+
     union 
     {
-        game_button_state Buttons[4];
+        game_button_state Buttons[10];
         struct  
         {
+            game_button_state LeftShoulder;
+            game_button_state RightShoulder;
+
             game_button_state MoveUp;
             game_button_state MoveRight;
             game_button_state MoveDown;
             game_button_state MoveLeft;
+
+            game_button_state ActionUp;
+            game_button_state ActionRight;
+            game_button_state ActionDown;
+            game_button_state ActionLeft;
         };
     };
 };
