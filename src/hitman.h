@@ -2,7 +2,6 @@
 #define HITMAN_H
 
 #include <stdio.h>
-#include <math.h>
 
 #include "hitman_defines.h"
 
@@ -51,7 +50,7 @@ struct game_controller_input
 
     union 
     {
-        game_button_state Buttons[8];
+        game_button_state Buttons[10];
         struct  
         {
             game_button_state LeftShoulder;

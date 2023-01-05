@@ -1,11 +1,13 @@
 #include "hitman.h"
 
+#include <math.h> // Userd for sinf, will be removed in the future.
+
 void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)
 {
     local_persist real32 tSine;
     int16 ToneVolume = 3000;
 
-    int ToneHz = GameState->ToneHz > 0 ? GameState->ToneHz : 1;
+    int ToneHz = GameState->ToneHz > 0 ? GameState->ToneHz : 256;
     int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
 
     int16 *SampleOut = SoundBuffer->Samples;
