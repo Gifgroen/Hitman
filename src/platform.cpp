@@ -473,6 +473,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
 
     uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
     int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
+    Assert(Result == 0);    
 
     SDL_Quit();
 }
@@ -678,10 +679,10 @@ int main(int argc, char *argv[])
     uint64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
     GameMemory.PermanentStorage = mmap(BaseAddress, TotalStorageSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     GameMemory.TransientStorage = (uint8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
-
-    game_state *State = (game_state*)GameMemory.PermanentStorage;
-
     Assert(GameMemory.PermanentStorage);
+    Assert(GameMemory.TransientStorage);
+    
+    game_state *State = (game_state*)GameMemory.PermanentStorage;
     Assert(State);
 
 #if HITMAN_DEBUG
@@ -693,7 +694,7 @@ int main(int argc, char *argv[])
 
     char const *WritePath = "../data/write.txt";
     char const *WriteContent = "Written to a file!\n\nWith multi line String\n";
-    printf("Writing %d bytes to %s\n", strlen(WriteContent), WritePath);
+    printf("Writing %zu bytes to %s\n", strlen(WriteContent), WritePath);
     DebugWriteEntireFile(WritePath, WriteContent, strlen(WriteContent));
 #endif
 
