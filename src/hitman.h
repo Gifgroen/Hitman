@@ -35,6 +35,15 @@ struct game_sound_output_buffer
     int16 *Samples;
 };
 
+struct game_memory 
+{
+    uint64 PermanentStorageSize;
+    void *PermanentStorage;
+    
+    uint64 TransientStorageSize;
+    void *TransientStorage;
+};
+
 struct game_button_state 
 {
     bool IsDown;

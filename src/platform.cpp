@@ -437,7 +437,7 @@ internal void SdlSetupWindow(sdl_setup *Setup, window_dimensions Dimensions)
     Assert(Setup->Renderer);
 }
 
-internal void CloseGame(game_code *GameCode, sdl_setup *Setup) 
+internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *GameMemory) 
 {
     if (GameCode->LibHandle) 
     {
@@ -470,6 +470,9 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup)
     }
 
     SDL_CloseAudio();
+
+    uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
+    int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
 
     SDL_Quit();
 }
@@ -662,7 +665,24 @@ int main(int argc, char *argv[])
     game_input *OldInput = &Input[0];
     game_input *NewInput = &Input[1];
 
-    game_state State = {0};
+    game_memory GameMemory = {};
+    GameMemory.PermanentStorageSize = MegaByte(64);
+    GameMemory.TransientStorageSize = GigaByte(4);
+
+#if HITMAN_DEBUG
+    void *BaseAddress = (void *)TeraByte(2);
+#else
+    void *BaseAddress = (void *)(0);
+#endif
+
+    uint64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    GameMemory.PermanentStorage = mmap(BaseAddress, TotalStorageSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    GameMemory.TransientStorage = (uint8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
+
+    game_state *State = (game_state*)GameMemory.PermanentStorage;
+
+    Assert(GameMemory.PermanentStorage);
+    Assert(State);
 
 #if HITMAN_DEBUG
     char const *Path = "../data/read.txt";
@@ -758,7 +778,7 @@ int main(int argc, char *argv[])
         SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
         SoundBuffer.Samples = Samples;
 
-        GameCode.GameUpdateAndRender(&Buffer, &State, &SoundBuffer, NewInput, SoundOutput.ToneHz);
+        GameCode.GameUpdateAndRender(&Buffer, State, &SoundBuffer, NewInput, SoundOutput.ToneHz);
 
         FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer); 
 
@@ -822,7 +842,7 @@ int main(int argc, char *argv[])
 
     // ENDREGION - Platform using SDL
 
-    CloseGame(&GameCode, &SdlSetup);
+    CloseGame(&GameCode, &SdlSetup, &GameMemory);
  
     return EXIT_SUCCESS;
 }

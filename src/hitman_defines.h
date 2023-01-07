@@ -19,3 +19,8 @@ typedef double real64;
 #define global static
 #define internal static
 #define local_persist static
+
+#define KiloByte(Value) ((Value) * 1024LL)
+#define MegaByte(Value) (KiloByte(Value) * 1024LL)
+#define GigaByte(Value) (MegaByte(Value) * 1024LL)
+#define TeraByte(Value) (GigaByte(Value) * 1024LL)
