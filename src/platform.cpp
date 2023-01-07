@@ -474,7 +474,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
 
     uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
     int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
-    Assert(Result == 0);    
+    Assert(Result == 0);
 
     SDL_Quit();
 }
@@ -652,7 +652,7 @@ int main(int argc, char *argv[])
     SoundOutput.tSine = 0.0f;
     SoundOutput.LatencySampleCount = FramesOfAudioLatency * (SoundOutput.SamplesPerSecond / GameUpdateHz);
     // TODO: compute variance in the frame time so we can choose what the lowest reasonable value is.
-    SoundOutput.SafetyBytes = 0.25 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
+    SoundOutput.SafetyBytes = 0.5 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
