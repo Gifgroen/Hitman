@@ -387,11 +387,11 @@ internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFra
 
 internal int64 GameCodeChanged(game_code *GameCode) 
 {
-    char const *filename = GameCode->LibPath;
-    struct stat result;
-    if (stat(filename, &result) == 0) 
+    char const *Filename = GameCode->LibPath;
+    struct stat Result;
+    if (stat(Filename, &Result) == 0) 
     {
-        return result.st_mtime;
+        return Result.st_mtime;
     }
     return 0;
 }
@@ -550,6 +550,55 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
+#if HITMAN_DEBUG
+internal void DebugFreeFileMemory(void *Memory)
+{
+    if (Memory)
+    {
+        free(Memory);
+    }
+}
+
+internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
+{
+    debug_read_file_result Result = {};
+    struct stat Stat;
+    if (stat(Filename, &Stat) == 0) 
+    {
+        FILE *File = fopen(Filename, "r");
+        if (File != NULL) 
+        {
+            int64 Size = Stat.st_size;
+            Result.ContentSize = Size;
+            Result.Content = malloc(Size);
+            if(Result.Content)
+            {
+                fread(Result.Content, Size, 1, File);
+                fclose(File);
+            } 
+            else 
+            {
+                DebugFreeFileMemory(Result.Content);
+            }
+        }
+    }
+    return Result;
+}
+
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, int Length) 
+{
+    FILE * File = fopen (Filename, "w");
+    if (File == NULL) 
+    {
+        return false;
+    }
+
+    uint64 Written = fwrite(Content, 1, Length, File);
+    fclose(File);
+    return Length == Written;
+}
+#endif
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -616,10 +665,22 @@ int main(int argc, char *argv[])
     game_state State = {0};
 
 #if HITMAN_DEBUG
+    char const *Path = "../data/read.txt";
+    debug_read_file_result ReadResult = DebugReadEntireFile(Path);
+    printf("Read file (length = %d)\n", ReadResult.ContentSize);
+    printf("%s", (char const *)ReadResult.Content);
+    DebugFreeFileMemory(ReadResult.Content);
+
+    char const *WritePath = "../data/write.txt";
+    char const *WriteContent = "Written to a file!\n\nWith multi line String\n";
+    printf("Writing %d bytes to %s\n", strlen(WriteContent), WritePath);
+    DebugWriteEntireFile(WritePath, WriteContent, strlen(WriteContent));
+#endif
+
+#if HITMAN_DEBUG
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
     int DebugLastPlayCursorIndex = 0;
 #endif
-
     uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
