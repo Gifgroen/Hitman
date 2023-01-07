@@ -48,7 +48,9 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_
     }
 }
 
-extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
+// Note: this has to be fast! It cannot be more then a millisecond!
+// Measure and improve performance here when necessary
+extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
 {
     game_state *GameState = (game_state *)GameMemory;
     for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
@@ -71,5 +73,10 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     }
 
     RenderWeirdGradient(Buffer, GameState, Input);
+}
+
+extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 
+{
+    game_state *GameState = (game_state *)GameMemory;
     GameOutputSound(SoundBuffer, GameState);
 }
