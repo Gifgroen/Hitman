@@ -7,10 +7,10 @@
             "label": "Build Hitman (Game)",
             "type": "shell",
             "osx": {
-                "command": "sh build.macos.sh",
+                "command": "sh build.macos.sh"
             },
             "windows": {
-                "command": "sh build.win32.sh",
+                "command": "sh build.win32.sh"
             },
             "problemMatcher": [],
             "group": {

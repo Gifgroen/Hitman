@@ -57,4 +57,10 @@ struct game_code
     GameUpdateAndRender_t GameUpdateAndRender;
 };
 
+struct debug_read_file_result
+{
+    uint32 ContentSize;
+    void *Content;
+};
+
 #endif
