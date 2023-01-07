@@ -48,8 +48,9 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_
     }
 }
 
-extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_state *GameState, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
+extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_sound_output_buffer *SoundBuffer, game_input *Input, int ToneHz) 
 {
+    game_state *GameState = (game_state *)GameMemory;
     for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
     {
         game_controller_input *Controller = &(Input->Controllers[i]);

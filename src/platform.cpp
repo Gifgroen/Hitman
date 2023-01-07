@@ -779,7 +779,7 @@ int main(int argc, char *argv[])
         SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
         SoundBuffer.Samples = Samples;
 
-        GameCode.GameUpdateAndRender(&Buffer, State, &SoundBuffer, NewInput, SoundOutput.ToneHz);
+        GameCode.GameUpdateAndRender(&Buffer, &GameMemory, &SoundBuffer, NewInput, SoundOutput.ToneHz);
 
         FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer); 
 
