@@ -1,3 +1,0 @@
-Written to a file!
-
-With multi line String

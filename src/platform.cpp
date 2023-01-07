@@ -593,7 +593,6 @@ internal bool DebugWriteEntireFile(char const *Filename, char const *Content, in
         return false;
     }
 
-    printf("Writing %d bytes to %s\n", Length, Filename);
     uint64 Written = fwrite(Content, 1, Length, File);
     fclose(File);
     return Length == Written;
@@ -674,6 +673,7 @@ int main(int argc, char *argv[])
 
     char const *WritePath = "../data/write.txt";
     char const *WriteContent = "Written to a file!\n\nWith multi line String\n";
+    printf("Writing %d bytes to %s\n", strlen(WriteContent), WritePath);
     DebugWriteEntireFile(WritePath, WriteContent, strlen(WriteContent));
 #endif
 
@@ -769,8 +769,8 @@ int main(int argc, char *argv[])
         }
         // END REGION: Write Audio to Ringbuffer
 
-        // int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
-        // printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
+        int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
+        printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;
