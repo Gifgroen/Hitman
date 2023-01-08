@@ -30,7 +30,7 @@ void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_
 {
     window_dimensions Dim = Buffer->Dimensions;
 
-    int Pitch = Dim.Width * Buffer->BytesPerPixel;
+    int Pitch = Buffer->Pitch;
     
     uint8 *Row = (uint8 *)Buffer->Pixels;
     for(int Y = 0; Y < Dim.Height; ++Y)

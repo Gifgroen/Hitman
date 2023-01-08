@@ -24,19 +24,19 @@ global sdl_audio_ring_buffer AudioRingBuffer;
 global bool Running = true;
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    internal void Alloc(game_offscreen_buffer *Buffer) 
-    {
-        window_dimensions Dim = Buffer->Dimensions;
-        int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
-        Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-    }
+internal void Alloc(game_offscreen_buffer *Buffer) 
+{
+    window_dimensions Dim = Buffer->Dimensions;
+    int Size = Dim.Height * Buffer->Pitch;
+    Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+}
 #else 
-    internal void Alloc(game_offscreen_buffer *Buffer) 
-    {
-        window_dimensions Dim = Buffer->Dimensions;
-        int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
-        Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    }
+internal void Alloc(game_offscreen_buffer *Buffer) 
+{
+    window_dimensions Dim = Buffer->Dimensions;
+    int Size = Dim.Height * Buffer->Pitch;
+    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+}
 #endif
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -49,7 +49,7 @@ internal void Dealloc(game_offscreen_buffer *Buffer)
 internal void Dealloc(game_offscreen_buffer *Buffer) 
 {
     window_dimensions Dim = Buffer->Dimensions;
-    int Result = munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
+    int Result = munmap(Buffer->Pixels, Dim.Height * Buffer->Pitch);
     Assert(Result == 0);
 }
 #endif
@@ -72,6 +72,8 @@ internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_b
     Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
     Buffer->Dimensions = { Width, Height };
+    Buffer->Pitch = Width * Buffer->BytesPerPixel;
+
     Alloc(Buffer);
 }
 
@@ -84,7 +86,7 @@ internal window_dimensions GetWindowDimensions(SDL_Window *Window)
 
 internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, uint32 Color)
 {
-    int Pitch = Buffer->BytesPerPixel * Buffer->Dimensions.Width;
+    int Pitch = Buffer->Pitch;
     uint8 *Pixel = ((uint8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
     for(int Y = Top; Y < Bottom; ++Y)
     {
@@ -136,7 +138,7 @@ internal void SDLDebugSyncDisplay(
 
 internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
-    SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Dimensions.Width * Buffer->BytesPerPixel);
+    SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Pitch);
     SDL_RenderCopy(Renderer, WindowTexture, 0, 0);
     SDL_RenderPresent(Renderer);
 }
@@ -769,6 +771,7 @@ int main(int argc, char *argv[])
         Buffer.Pixels = OffscreenBuffer.Pixels;
         Buffer.Dimensions = OffscreenBuffer.Dimensions;
         Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;
+        Buffer.Pitch = OffscreenBuffer.Pitch;
 
         GameCode.GameUpdateAndRender(&Buffer, &GameMemory, NewInput, SoundOutput.ToneHz);
 
@@ -778,11 +781,9 @@ int main(int argc, char *argv[])
         
         // TODO: Check if we maybe need to check if soundIsValid and wrap if it is not Valid.
 
-        int ByteToLock = ((SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % 
-            SoundOutput.SecondaryBufferSize);
+        int ByteToLock = ((SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize);
 
-        int ExpectedSoundBytesPerFrame = 
-            (SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz;
+        int ExpectedSoundBytesPerFrame = (SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz;
         int ExpectedFrameBoundaryByte = AudioRingBuffer.PlayCursor + ExpectedSoundBytesPerFrame;
 
         int SafeWriteCursor = AudioRingBuffer.WriteCursor;
@@ -794,7 +795,6 @@ int main(int argc, char *argv[])
         SafeWriteCursor += SoundOutput.SafetyBytes;
 
         bool AudioCardIsLowLatency = SafeWriteCursor < ExpectedFrameBoundaryByte;
-
         int TargetCursor = 0;
         if (AudioCardIsLowLatency) 
         {
