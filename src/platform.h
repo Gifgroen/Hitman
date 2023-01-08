@@ -28,8 +28,6 @@ struct sdl_sound_output
     int BytesPerSample;
     int SecondaryBufferSize;
 
-    real32 tSine;
-    int LatencySampleCount;
     int SafetyBytes;
 };
 

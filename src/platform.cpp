@@ -642,7 +642,6 @@ int main(int argc, char *argv[])
     SdlSetupWindow(&SdlSetup, Dimensions);
 
     int const GameUpdateHz = 30;
-    int const FramesOfAudioLatency = 3;
     real64 TargetSecondsPerFrame = 1.0f / (real64)GameUpdateHz;
     
     int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
@@ -659,8 +658,6 @@ int main(int argc, char *argv[])
     SoundOutput.WavePeriod = SoundOutput.SamplesPerSecond / SoundOutput.ToneHz;
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
-    SoundOutput.tSine = 0.0f;
-    SoundOutput.LatencySampleCount = FramesOfAudioLatency * (SoundOutput.SamplesPerSecond / GameUpdateHz);
     // TODO: compute variance in the frame time so we can choose what the lowest reasonable value is.
     SoundOutput.SafetyBytes = 0.5 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
 
