@@ -23,28 +23,36 @@ global sdl_audio_ring_buffer AudioRingBuffer;
 
 global bool Running = true;
 
-internal void Alloc(game_offscreen_buffer *Buffer) 
-{
-    window_dimensions Dim = Buffer->Dimensions;
-    int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    internal void Alloc(game_offscreen_buffer *Buffer) 
+    {
+        window_dimensions Dim = Buffer->Dimensions;
+        int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
+        Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    }
 #else 
-    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    internal void Alloc(game_offscreen_buffer *Buffer) 
+    {
+        window_dimensions Dim = Buffer->Dimensions;
+        int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
+        Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    }
 #endif
-}
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 internal void Dealloc(game_offscreen_buffer *Buffer) 
 {
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     bool Result = VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
     Assert(Result)
+}
 #else 
+internal void Dealloc(game_offscreen_buffer *Buffer) 
+{
     window_dimensions Dim = Buffer->Dimensions;
     int Result = munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
     Assert(Result == 0);
-#endif
 }
+#endif
 
 internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
