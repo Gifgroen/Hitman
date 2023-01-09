@@ -14,6 +14,6 @@ pushd $BASE_DIR/build
 $CC $COMMON_COMPILER_FLAGS -shared -o ./libhitman.so -fPIC $BASE_DIR/src/hitman.cpp 
 
 # Create platform layer that uses platform agnostic Game
-$CC $COMMON_COMPILER_FLAGS $BUILD_FLAGS -o hitman_macos -fPIC $BASE_DIR/src/platform.cpp $SDL2_LINKER_FLAGS
+$CC $COMMON_COMPILER_FLAGS $BUILD_FLAGS -o hitman_game -fPIC $BASE_DIR/src/platform.cpp $SDL2_LINKER_FLAGS
 
 popd

@@ -16,8 +16,10 @@ struct window_dimensions
 struct game_offscreen_buffer 
 {
     window_dimensions Dimensions;
-    void *Pixels;
     int BytesPerPixel;
+    int Pitch;
+
+    void *Pixels;
 };
 
 struct game_state 

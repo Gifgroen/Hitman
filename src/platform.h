@@ -28,8 +28,7 @@ struct sdl_sound_output
     int BytesPerSample;
     int SecondaryBufferSize;
 
-    real32 tSine;
-    int LatencySampleCount;
+    int SafetyBytes;
 };
 
 struct sdl_audio_ring_buffer
@@ -46,7 +45,8 @@ struct sdl_debug_time_marker
     int WriteCursor;
 };
 
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_sound_output_buffer*, game_input*, int);
+typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*, int);
+typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
 
 struct game_code
 {
@@ -55,6 +55,7 @@ struct game_code
     int64 LastWriteTime;
 
     GameUpdateAndRender_t GameUpdateAndRender;
+    GameGetSoundSamples_t GameGetSoundSamples;
 };
 
 struct debug_read_file_result

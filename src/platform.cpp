@@ -23,28 +23,36 @@ global sdl_audio_ring_buffer AudioRingBuffer;
 
 global bool Running = true;
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
     window_dimensions Dim = Buffer->Dimensions;
-    int Size = Dim.Width * Dim.Height * Buffer->BytesPerPixel;
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    int Size = Dim.Height * Buffer->Pitch;
     Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-#else 
-    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-#endif
 }
+#else 
+internal void Alloc(game_offscreen_buffer *Buffer) 
+{
+    window_dimensions Dim = Buffer->Dimensions;
+    int Size = Dim.Height * Buffer->Pitch;
+    Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+}
+#endif
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 internal void Dealloc(game_offscreen_buffer *Buffer) 
 {
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     bool Result = VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
     Assert(Result)
-#else 
-    window_dimensions Dim = Buffer->Dimensions;
-    int Result = munmap(Buffer->Pixels, Dim.Width * Dim.Height * Buffer->BytesPerPixel);
-    Assert(Result == 0);
-#endif
 }
+#else 
+internal void Dealloc(game_offscreen_buffer *Buffer) 
+{
+    window_dimensions Dim = Buffer->Dimensions;
+    int Result = munmap(Buffer->Pixels, Dim.Height * Buffer->Pitch);
+    Assert(Result == 0);
+}
+#endif
 
 internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, window_dimensions NewDimensions)
 {
@@ -64,6 +72,8 @@ internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_b
     Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
     Buffer->Dimensions = { Width, Height };
+    Buffer->Pitch = Width * Buffer->BytesPerPixel;
+
     Alloc(Buffer);
 }
 
@@ -76,7 +86,7 @@ internal window_dimensions GetWindowDimensions(SDL_Window *Window)
 
 internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, uint32 Color)
 {
-    int Pitch = Buffer->BytesPerPixel * Buffer->Dimensions.Width;
+    int Pitch = Buffer->Pitch;
     uint8 *Pixel = ((uint8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
     for(int Y = Top; Y < Bottom; ++Y)
     {
@@ -128,7 +138,7 @@ internal void SDLDebugSyncDisplay(
 
 internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
-    SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Dimensions.Width * Buffer->BytesPerPixel);
+    SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Pitch);
     SDL_RenderCopy(Renderer, WindowTexture, 0, 0);
     SDL_RenderPresent(Renderer);
 }
@@ -413,6 +423,7 @@ internal int LoadGameCode(game_code *GameCode)
 
     dlerror();  // reset dl errors
     GameCode->GameUpdateAndRender = (GameUpdateAndRender_t)dlsym(GameCode->LibHandle, "GameUpdateAndRender");
+    GameCode->GameGetSoundSamples = (GameGetSoundSamples_t)dlsym(GameCode->LibHandle, "GameGetSoundSamples");
 
     char const *DlSymError = dlerror();
     if (DlSymError) 
@@ -471,9 +482,14 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
 
     SDL_CloseAudio();
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    bool Result = VirtualFree(GameMemory->PermanentStorage, 0, MEM_RELEASE);
+    Assert(Result);
+#else
     uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
     int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
-    Assert(Result == 0);    
+    Assert(Result == 0);
+#endif
 
     SDL_Quit();
 }
@@ -589,7 +605,7 @@ internal debug_read_file_result DebugReadEntireFile(char const *Filename)
     return Result;
 }
 
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, int Length) 
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, uint64 Length) 
 {
     FILE * File = fopen (Filename, "w");
     if (File == NULL) 
@@ -631,7 +647,6 @@ int main(int argc, char *argv[])
     SdlSetupWindow(&SdlSetup, Dimensions);
 
     int const GameUpdateHz = 30;
-    int const FramesOfAudioLatency = 3;
     real64 TargetSecondsPerFrame = 1.0f / (real64)GameUpdateHz;
     
     int DetectedFrameRate = GetWindowRefreshRate(SdlSetup.Window);
@@ -648,8 +663,8 @@ int main(int argc, char *argv[])
     SoundOutput.WavePeriod = SoundOutput.SamplesPerSecond / SoundOutput.ToneHz;
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
-    SoundOutput.tSine = 0.0f;
-    SoundOutput.LatencySampleCount = FramesOfAudioLatency * (SoundOutput.SamplesPerSecond / GameUpdateHz);
+    // TODO: compute variance in the frame time so we can choose what the lowest reasonable value is.
+    SoundOutput.SafetyBytes = 0.25 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
@@ -677,11 +692,16 @@ int main(int argc, char *argv[])
 #endif
 
     uint64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#else 
     GameMemory.PermanentStorage = mmap(BaseAddress, TotalStorageSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+#endif    
     GameMemory.TransientStorage = (uint8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
     Assert(GameMemory.PermanentStorage);
     Assert(GameMemory.TransientStorage);
     
+
     game_state *State = (game_state*)GameMemory.PermanentStorage;
     Assert(State);
 
@@ -700,7 +720,7 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
-    int DebugLastPlayCursorIndex = 0;
+    uint64 DebugLastPlayCursorIndex = 0;
 #endif
     uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
@@ -709,6 +729,9 @@ int main(int argc, char *argv[])
 #endif
 
     SDL_Event e;
+
+    int AudioLatencyBytes;
+    real32 AudioLatencySeconds;
 
     while(Running) 
     {
@@ -751,12 +774,46 @@ int main(int argc, char *argv[])
             LoadGameCode(&GameCode);
         }
 
+        game_offscreen_buffer Buffer = {};
+        Buffer.Pixels = OffscreenBuffer.Pixels;
+        Buffer.Dimensions = OffscreenBuffer.Dimensions;
+        Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;
+        Buffer.Pitch = OffscreenBuffer.Pitch;
+
+        GameCode.GameUpdateAndRender(&Buffer, &GameMemory, NewInput, SoundOutput.ToneHz);
+
         // REGION: Write Audio to Ringbuffer
 
         SDL_LockAudio();
-        int ByteToLock = (SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize;
-        int TargetCursor = ((AudioRingBuffer.PlayCursor + (SoundOutput.LatencySampleCount * SoundOutput.BytesPerSample)) % SoundOutput.SecondaryBufferSize);
-        int BytesToWrite;
+        
+        // TODO: Check if we maybe need to check if soundIsValid and wrap if it is not Valid.
+
+        int ByteToLock = ((SoundOutput.RunningSampleIndex * SoundOutput.BytesPerSample) % SoundOutput.SecondaryBufferSize);
+
+        int ExpectedSoundBytesPerFrame = (SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz;
+        int ExpectedFrameBoundaryByte = AudioRingBuffer.PlayCursor + ExpectedSoundBytesPerFrame;
+
+        int SafeWriteCursor = AudioRingBuffer.WriteCursor;
+        if (SafeWriteCursor < AudioRingBuffer.PlayCursor)
+        {
+            SafeWriteCursor += SoundOutput.SecondaryBufferSize;
+        }
+        Assert(SafeWriteCursor >= AudioRingBuffer.PlayCursor)
+        SafeWriteCursor += SoundOutput.SafetyBytes;
+
+        bool AudioCardIsLowLatency = SafeWriteCursor < ExpectedFrameBoundaryByte;
+        int TargetCursor = 0;
+        if (AudioCardIsLowLatency) 
+        {
+            TargetCursor = ExpectedFrameBoundaryByte + ExpectedSoundBytesPerFrame;                    
+        }
+        else 
+        {
+            TargetCursor = AudioRingBuffer.WriteCursor + ExpectedSoundBytesPerFrame + SoundOutput.SafetyBytes;
+        }
+        TargetCursor = (TargetCursor % SoundOutput.SecondaryBufferSize);
+
+        int BytesToWrite = 0;
         if(ByteToLock > TargetCursor)
         {
             BytesToWrite = (SoundOutput.SecondaryBufferSize - ByteToLock);
@@ -767,21 +824,36 @@ int main(int argc, char *argv[])
             BytesToWrite = TargetCursor - ByteToLock;
         }
 
-        SDL_UnlockAudio();
-
-        game_offscreen_buffer Buffer = {};
-        Buffer.Pixels = OffscreenBuffer.Pixels;
-        Buffer.Dimensions = OffscreenBuffer.Dimensions;
-        Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;
-
         game_sound_output_buffer SoundBuffer = {};
         SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
         SoundBuffer.SampleCount = BytesToWrite / SoundOutput.BytesPerSample;
         SoundBuffer.Samples = Samples;
 
-        GameCode.GameUpdateAndRender(&Buffer, &GameMemory, &SoundBuffer, NewInput, SoundOutput.ToneHz);
+        GameCode.GameGetSoundSamples(&GameMemory, &SoundBuffer);
+
+        SDL_UnlockAudio();
 
         FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer); 
+
+        int UnwrappedWriteCursor = AudioRingBuffer.WriteCursor;
+        if (UnwrappedWriteCursor < AudioRingBuffer.PlayCursor)
+        {
+            UnwrappedWriteCursor += SoundOutput.SecondaryBufferSize;
+        }
+        
+        AudioLatencyBytes = UnwrappedWriteCursor - AudioRingBuffer.PlayCursor;
+        AudioLatencySeconds = (((real32)AudioLatencyBytes / (real32)SoundOutput.BytesPerSample) / 
+            (real32)SoundOutput.SamplesPerSecond);
+        printf(
+            "BTL: %d, TC: %d, BTW: %d - PC: %d, WC: %d, DELTA: %d (%fs)\n", 
+            ByteToLock, 
+            TargetCursor,
+            BytesToWrite, 
+            AudioRingBuffer.PlayCursor,
+            AudioRingBuffer.WriteCursor,
+            AudioLatencyBytes,
+            AudioLatencySeconds
+        );
 
         if(!SoundIsPlaying)
         {
@@ -789,9 +861,6 @@ int main(int argc, char *argv[])
             SoundIsPlaying = true;
         }
         // END REGION: Write Audio to Ringbuffer
-
-        int AudioLatencyBytes = AudioRingBuffer.WriteCursor - AudioRingBuffer.PlayCursor;
-        printf("PC: %d, BTL: %d, WC: %d, BTW: %d, DELTA: %d\n", AudioRingBuffer.PlayCursor, ByteToLock, AudioRingBuffer.WriteCursor, BytesToWrite, AudioLatencyBytes);
 
         game_input *Temp = NewInput;
         NewInput = OldInput;

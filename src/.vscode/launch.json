@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug (MacOS)",
-            "program": "${workspaceFolder}/../build/hitman_macos",
+            "program": "${workspaceFolder}/../build/hitman_game",
             "args": [],
             "cwd": "${workspaceFolder}"
         },
