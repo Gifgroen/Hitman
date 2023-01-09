@@ -482,9 +482,14 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
 
     SDL_CloseAudio();
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    bool Result = VirtualFree(GameMemory->PermanentStorage, 0, MEM_RELEASE);
+    Assert(Result);
+#else
     uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
     int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
     Assert(Result == 0);
+#endif
 
     SDL_Quit();
 }
@@ -600,7 +605,7 @@ internal debug_read_file_result DebugReadEntireFile(char const *Filename)
     return Result;
 }
 
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, int Length) 
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, uint64 Length) 
 {
     FILE * File = fopen (Filename, "w");
     if (File == NULL) 
@@ -659,7 +664,7 @@ int main(int argc, char *argv[])
     SoundOutput.BytesPerSample = sizeof(int16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
     // TODO: compute variance in the frame time so we can choose what the lowest reasonable value is.
-    SoundOutput.SafetyBytes = 0.5 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
+    SoundOutput.SafetyBytes = 0.25 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
     int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
@@ -687,11 +692,16 @@ int main(int argc, char *argv[])
 #endif
 
     uint64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#else 
     GameMemory.PermanentStorage = mmap(BaseAddress, TotalStorageSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+#endif    
     GameMemory.TransientStorage = (uint8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
     Assert(GameMemory.PermanentStorage);
     Assert(GameMemory.TransientStorage);
     
+
     game_state *State = (game_state*)GameMemory.PermanentStorage;
     Assert(State);
 
@@ -710,7 +720,7 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
-    int DebugLastPlayCursorIndex = 0;
+    uint64 DebugLastPlayCursorIndex = 0;
 #endif
     uint64 LastCounter = SDL_GetPerformanceCounter(); 
 
@@ -825,7 +835,7 @@ int main(int argc, char *argv[])
 
         FillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer); 
 
-        uint64 UnwrappedWriteCursor = AudioRingBuffer.WriteCursor;
+        int UnwrappedWriteCursor = AudioRingBuffer.WriteCursor;
         if (UnwrappedWriteCursor < AudioRingBuffer.PlayCursor)
         {
             UnwrappedWriteCursor += SoundOutput.SecondaryBufferSize;
