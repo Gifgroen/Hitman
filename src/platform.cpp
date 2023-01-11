@@ -238,6 +238,34 @@ internal real32 SDLProcessGameControllerAxisValue(int16 Value, int16 DeadZoneThr
     return(Result);
 }
 
+global bool IsFullscreen = false;
+
+#if HITMAN_DEBUG
+internal void DebugHandleKeyEvent(SDL_Event Event, sdl_setup *Setup)
+{
+    
+    SDL_Keycode KeyCode = Event.key.keysym.sym;
+    bool IsDown = (Event.key.state == SDL_PRESSED);
+
+    if (Event.key.repeat == 0) 
+    {
+        if(
+            Event.type == SDL_KEYDOWN && 
+                ((KeyCode == 13 || KeyCode == SDLK_LALT) && Event.key.keysym.mod == 1024 )
+            )
+        {
+            printf("Switching FULLLSCREEN mode\n");
+            uint32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
+            bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
+            SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
+
+            // SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : SDL_WINDOW_FULLSCREEN);
+            // IsFullscreen = !IsFullscreen;
+        }
+    }
+}
+#endif
+    
 internal void HandleKeyEvent(SDL_KeyboardEvent key, game_controller_input *KeyboardController)
 {
     SDL_Keycode KeyCode = key.keysym.sym;
@@ -761,6 +789,9 @@ int main(int argc, char *argv[])
                 case SDL_KEYDOWN:
                 case SDL_KEYUP: 
                 {
+                    #if HITMAN_DEBUG
+                    DebugHandleKeyEvent(e, &SdlSetup);
+                    #endif
                     HandleKeyEvent(e.key, NewKeyboardController);
                 } break;
             }
