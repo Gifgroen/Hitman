@@ -238,27 +238,17 @@ internal real32 SDLProcessGameControllerAxisValue(int16 Value, int16 DeadZoneThr
     return(Result);
 }
 
-global bool IsFullscreen = false;
-
 #if HITMAN_DEBUG
-internal void DebugHandleKeyEvent(SDL_Event Event, sdl_setup *Setup)
+internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup)
 {
-    SDL_Keycode KeyCode = Event.key.keysym.sym;
-    printf("Debug code: %d, mod = %d\n", KeyCode, Event.key.keysym.mod);
+    SDL_Keycode KeyCode = Event.keysym.sym;
 
-    bool IsDown = (Event.key.state == SDL_PRESSED);
+    bool IsDown = (Event.state == SDL_PRESSED);
 
-    if (Event.key.repeat == 0) 
+    if (Event.repeat == 0) 
     {
-        uint32 mod = Event.key.keysym.mod;
-        if( mod & KMOD_LALT ) { printf( "LALT " ); }
-        if(
-            Event.type == SDL_KEYDOWN && 
-                (
-                    (KeyCode == SDLK_RETURN && Event.key.keysym.mod == 1024) || // MAC: CMD + Enter
-                    (KeyCode == SDLK_RETURN && mod & KMOD_CTRL)                 // WIN: CTRL + Enter
-                )
-            )
+        uint32 mod = Event.keysym.mod;
+        if (IsDown && (KeyCode == SDLK_RETURN && (mod & KMOD_CTRL)))
         {
             uint32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
             bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
@@ -760,9 +750,6 @@ int main(int argc, char *argv[])
 
     SDL_Event e;
 
-    int AudioLatencyBytes;
-    real32 AudioLatencySeconds;
-
     while(Running) 
     {
         game_controller_input *OldKeyboardController = GetControllerForIndex(OldInput, 0);
@@ -792,7 +779,7 @@ int main(int argc, char *argv[])
                 case SDL_KEYUP: 
                 {
                     #if HITMAN_DEBUG
-                    DebugHandleKeyEvent(e, &SdlSetup);
+                    DebugHandleKeyEvent(e.key, &SdlSetup);
                     #endif
                     HandleKeyEvent(e.key, NewKeyboardController);
                 } break;
@@ -873,10 +860,11 @@ int main(int argc, char *argv[])
         {
             UnwrappedWriteCursor += SoundOutput.SecondaryBufferSize;
         }
-        
-        AudioLatencyBytes = UnwrappedWriteCursor - AudioRingBuffer.PlayCursor;
-        AudioLatencySeconds = (((real32)AudioLatencyBytes / (real32)SoundOutput.BytesPerSample) / 
-            (real32)SoundOutput.SamplesPerSecond);
+
+#if 0
+        int AudioLatencyBytes = UnwrappedWriteCursor - AudioRingBuffer.PlayCursor;
+        real32 AudioLatencySeconds = (((real32)AudioLatencyBytes / (real32)SoundOutput.BytesPerSample) / (real32)SoundOutput.SamplesPerSecond);
+
         printf(
             "BTL: %d, TC: %d, BTW: %d - PC: %d, WC: %d, DELTA: %d (%fs)\n", 
             ByteToLock, 
@@ -887,7 +875,7 @@ int main(int argc, char *argv[])
             AudioLatencyBytes,
             AudioLatencySeconds
         );
-
+#endif
         if(!SoundIsPlaying)
         {
             SDL_PauseAudio(0);
