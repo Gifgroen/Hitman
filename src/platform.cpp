@@ -243,24 +243,26 @@ global bool IsFullscreen = false;
 #if HITMAN_DEBUG
 internal void DebugHandleKeyEvent(SDL_Event Event, sdl_setup *Setup)
 {
-    
     SDL_Keycode KeyCode = Event.key.keysym.sym;
+    printf("Debug code: %d, mod = %d\n", KeyCode, Event.key.keysym.mod);
+
     bool IsDown = (Event.key.state == SDL_PRESSED);
 
     if (Event.key.repeat == 0) 
     {
+        uint32 mod = Event.key.keysym.mod;
+        if( mod & KMOD_LALT ) { printf( "LALT " ); }
         if(
             Event.type == SDL_KEYDOWN && 
-                ((KeyCode == 13 || KeyCode == SDLK_LALT) && Event.key.keysym.mod == 1024 )
+                (
+                    (KeyCode == SDLK_RETURN && Event.key.keysym.mod == 1024) || // MAC: CMD + Enter
+                    (KeyCode == SDLK_RETURN && mod & KMOD_CTRL)                 // WIN: CTRL + Enter
+                )
             )
         {
-            printf("Switching FULLLSCREEN mode\n");
             uint32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
             bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
             SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
-
-            // SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : SDL_WINDOW_FULLSCREEN);
-            // IsFullscreen = !IsFullscreen;
         }
     }
 }
