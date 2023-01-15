@@ -3,12 +3,6 @@
 
 #include "hitman_defines.h"
 
-#if HITMAN_DEBUG
-#define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
-#else 
-#define Assert(Expression)
-#endif
-
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
 struct sdl_setup 

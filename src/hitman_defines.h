@@ -1,6 +1,12 @@
 
 #include <stdint.h>
 
+#if HITMAN_DEBUG
+#define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
+#else 
+#define Assert(Expression)
+#endif
+
 typedef int8_t int8;
 typedef int16_t int16;
 typedef int32_t int32;

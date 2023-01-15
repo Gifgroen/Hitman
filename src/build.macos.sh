@@ -11,7 +11,7 @@ mkdir -p $BASE_DIR/build
 pushd $BASE_DIR/build
 
 # Create Game service
-$CC $COMMON_COMPILER_FLAGS -shared -o ./libhitman.so -fPIC $BASE_DIR/src/hitman.cpp 
+$CC $COMMON_COMPILER_FLAGS $BUILD_FLAGS -shared -o ./libhitman.so -fPIC $BASE_DIR/src/hitman.cpp 
 
 # Create platform layer that uses platform agnostic Game
 $CC $COMMON_COMPILER_FLAGS $BUILD_FLAGS -o hitman_game -fPIC $BASE_DIR/src/platform.cpp $SDL2_LINKER_FLAGS
