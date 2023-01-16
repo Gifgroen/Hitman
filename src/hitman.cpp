@@ -30,28 +30,6 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
     }
 }
 
-void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_input *Input) 
-{
-    window_dimensions Dim = Buffer->Dimensions;
-
-    int Pitch = Buffer->Pitch;
-    
-    uint8 *Row = (uint8 *)Buffer->Pixels;
-    for(int Y = 0; Y < Dim.Height; ++Y)
-    {
-        uint32 *Pixel = (uint32 *)Row;
-        for(int X = 0; X < Dim.Width; ++X)
-        {
-            uint8 Red = 0;
-            uint8 Blue = X + State->XOffset;
-            uint8 Green = Y;
-            
-            *Pixel++ = ((Red << 16) | (Green << 8)) | Blue;
-        }
-        Row += Pitch;
-    }
-}
-
 internal void DrawRectangle(game_offscreen_buffer *Buffer, int originX, int32 originY, int32 destinationX, int destinationY, uint32 TileValue)
 {
     Assert(originX < destinationX);
@@ -86,19 +64,19 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         
         if (Controller->MoveLeft.IsDown) 
         {
-            GameState->XOffset -= 1 * Speed;
+            GameState->PlayerX -= 1 * Speed;
         }
         if (Controller->MoveRight.IsDown)
         {
-            GameState->XOffset += 1 * Speed;
+            GameState->PlayerX += 1 * Speed;
         }
         if (Controller->MoveUp.IsDown) 
         {
-            GameState->YOffset -= 1 * Speed;
+            GameState->PlayerY -= 1 * Speed;
         }
         if (Controller->MoveDown.IsDown) 
         {
-            GameState->YOffset += 1 * Speed;
+            GameState->PlayerY += 1 * Speed;
         }
         real32 AverageY = Controller->StickAverageY;
         if (AverageY != 0)
@@ -106,8 +84,6 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
             GameState->ToneHz = 256 + (int)(128.0f * AverageY);
         }
     }
-
-    RenderWeirdGradient(Buffer, GameState, Input);
 
     window_dimensions Dim = Buffer->Dimensions;
     DrawRectangle(Buffer, 0, 0, Dim.Width, Dim.Height, 0xFF000FF); // Clear the Buffer to weird magenta
@@ -135,16 +111,16 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         {
             uint32 TileValue = TileMap[Y][X] == 1 ? 0xFFFFFFFF : 0xFF008335;
 
-            int originX = X * TileWidth;
-            int originY = Y * TileHeight;
-            DrawRectangle(Buffer, originX, originY, originX + TileWidth, originY + TileHeight, TileValue);
+            int OriginX = X * TileWidth;
+            int OriginY = Y * TileHeight;
+            DrawRectangle(Buffer, OriginX, OriginY, OriginX + TileWidth, OriginY + TileHeight, TileValue);
         }
     }
 
-    int playerX = GameState->XOffset;
-    int playerY = GameState->YOffset;
-    printf("player: (%d, %d)\n", playerX, playerY);
-    DrawRectangle(Buffer, playerX, playerY, playerX + 32, playerY + 50, 0xFF0000FF);
+    int PlayerX = GameState->PlayerX;
+    int PlayerY = GameState->PlayerY;
+    printf("player: (%d, %d)\n", PlayerX, PlayerY);
+    DrawRectangle(Buffer, PlayerX, PlayerY, PlayerX + 32, PlayerY + 50, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 

@@ -24,8 +24,8 @@ struct game_offscreen_buffer
 
 struct game_state 
 {
-    int XOffset;
-    int YOffset;
+    int PlayerX;
+    int PlayerY;
 
     int ToneHz;
 };
