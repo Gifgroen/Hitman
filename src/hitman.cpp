@@ -78,18 +78,27 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, int originX, int32 or
 
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
 {
-    game_state *GameState = (game_state *)GameMemory;
+    int Speed = 5;
+    game_state *GameState = (game_state *)GameMemory->PermanentStorage;
     for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
     {
         game_controller_input *Controller = &(Input->Controllers[i]);
         
         if (Controller->MoveLeft.IsDown) 
         {
-            GameState->XOffset += 10;
+            GameState->XOffset -= 1 * Speed;
         }
         if (Controller->MoveRight.IsDown)
         {
-            GameState->XOffset -= 10;
+            GameState->XOffset += 1 * Speed;
+        }
+        if (Controller->MoveUp.IsDown) 
+        {
+            GameState->YOffset -= 1 * Speed;
+        }
+        if (Controller->MoveDown.IsDown) 
+        {
+            GameState->YOffset += 1 * Speed;
         }
         real32 AverageY = Controller->StickAverageY;
         if (AverageY != 0)
@@ -131,6 +140,11 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
             DrawRectangle(Buffer, originX, originY, originX + TileWidth, originY + TileHeight, TileValue);
         }
     }
+
+    int playerX = GameState->XOffset;
+    int playerY = GameState->YOffset;
+    printf("player: (%d, %d)\n", playerX, playerY);
+    DrawRectangle(Buffer, playerX, playerY, playerX + 32, playerY + 50, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 

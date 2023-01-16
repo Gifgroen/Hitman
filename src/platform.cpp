@@ -723,6 +723,7 @@ int main(int argc, char *argv[])
     
 
     game_state *State = (game_state*)GameMemory.PermanentStorage;
+    *State = {80, 64, 0};
     Assert(State);
 
 #if HITMAN_DEBUG
