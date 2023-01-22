@@ -6,7 +6,9 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
 {
     local_persist real32 tSine;
     int16 ToneVolume = 3000;
-#ifndef HITMAN_DEBUG
+#if HITMAN_INTERNAL
+    int WavePeriod = 1; 
+#else
     int ToneHz = GameState->ToneHz > 0 ? GameState->ToneHz : 256;
     int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
 #endif
@@ -18,7 +20,7 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
     
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
         tSine = 0;
 #else
         tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
@@ -125,6 +127,6 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 
 {
-    game_state *GameState = (game_state *)GameMemory;
+    game_state *GameState = (game_state *)GameMemory->PermanentStorage;
     GameOutputSound(SoundBuffer, GameState);
 }

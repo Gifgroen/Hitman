@@ -111,6 +111,7 @@ inline void SDLDrawSoundBufferMarker(
     SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
 }
 
+#if HITMAN_INTERNAL
 internal void SDLDebugSyncDisplay(
     game_offscreen_buffer *Buffer, 
     int DebugTimeMarkerCount, 
@@ -135,6 +136,7 @@ internal void SDLDebugSyncDisplay(
         SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->WriteCursor, 0xFFFF0000);
     }
 }
+#endif
 
 internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
@@ -238,7 +240,7 @@ internal real32 SDLProcessGameControllerAxisValue(int16 Value, int16 DeadZoneThr
     return(Result);
 }
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
 internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup)
 {
     SDL_Keycode KeyCode = Event.keysym.sym;
@@ -590,7 +592,7 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL // DEBUG I/O
 internal void DebugFreeFileMemory(void *Memory)
 {
     if (Memory)
@@ -705,7 +707,7 @@ int main(int argc, char *argv[])
     GameMemory.PermanentStorageSize = MegaByte(64);
     GameMemory.TransientStorageSize = GigaByte(4);
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
     void *BaseAddress = (void *)TeraByte(2);
 #else
     void *BaseAddress = (void *)(0);
@@ -726,7 +728,7 @@ int main(int argc, char *argv[])
     *State = {80, 64, 0};
     Assert(State);
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
     char const *Path = "../data/read.txt";
     debug_read_file_result ReadResult = DebugReadEntireFile(Path);
     printf("Read file (length = %d)\n", ReadResult.ContentSize);
@@ -739,7 +741,7 @@ int main(int argc, char *argv[])
     DebugWriteEntireFile(WritePath, WriteContent, strlen(WriteContent));
 #endif
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
     uint64 DebugLastPlayCursorIndex = 0;
 #endif
@@ -779,7 +781,7 @@ int main(int argc, char *argv[])
                 case SDL_KEYDOWN:
                 case SDL_KEYUP: 
                 {
-                    #if HITMAN_DEBUG
+                    #if HITMAN_INTERNAL
                     DebugHandleKeyEvent(e.key, &SdlSetup);
                     #endif
                     HandleKeyEvent(e.key, NewKeyboardController);
@@ -862,10 +864,9 @@ int main(int argc, char *argv[])
             UnwrappedWriteCursor += SoundOutput.SecondaryBufferSize;
         }
 
-#if 0
+#if 0 // SOUND SYNC DEBUG
         int AudioLatencyBytes = UnwrappedWriteCursor - AudioRingBuffer.PlayCursor;
         real32 AudioLatencySeconds = (((real32)AudioLatencyBytes / (real32)SoundOutput.BytesPerSample) / (real32)SoundOutput.SamplesPerSecond);
-
         printf(
             "BTL: %d, TC: %d, BTW: %d - PC: %d, WC: %d, DELTA: %d (%fs)\n", 
             ByteToLock, 
@@ -897,13 +898,13 @@ int main(int argc, char *argv[])
         uint64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
         SDLDebugSyncDisplay(&OffscreenBuffer, ArrayCount(DebugTimeMarkers), DebugTimeMarkers, &SoundOutput, TargetSecondsPerFrame);
 #endif
 
         UpdateWindow(SdlSetup.WindowTexture, &OffscreenBuffer,  SdlSetup.Renderer);
 
-#ifdef HITMAN_DEBUG
+#if HITMAN_INTERNAL
     {
         sdl_debug_time_marker *marker = &DebugTimeMarkers[DebugLastPlayCursorIndex++];
         if (DebugLastPlayCursorIndex >= ArrayCount(DebugTimeMarkers))

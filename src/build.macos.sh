@@ -3,7 +3,7 @@ CC=gcc
 BASE_DIR="${HOME}/Projects/Games/Hitman/"
 
 COMMON_COMPILER_FLAGS="-g3 -Wall -std=c++20"
-BUILD_FLAGS="-DHITMAN_DEBUG=1"
+BUILD_FLAGS="-DHITMAN_DEBUG=1 -DHITMAN_INTERNAL=1"
 
 SDL2_LINKER_FLAGS="`sdl2-config --cflags --libs`"
 

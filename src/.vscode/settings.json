@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "numbers": "cpp",
+        "__node_handle": "cpp"
+    }
+}

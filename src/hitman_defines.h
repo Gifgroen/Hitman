@@ -1,7 +1,7 @@
 
 #include <stdint.h>
 
-#if HITMAN_DEBUG
+#if HITMAN_INTERNAL
 #define Assert(Expression) if(!(Expression)) {*(volatile int *)0 = 0;}
 #else 
 #define Assert(Expression)
