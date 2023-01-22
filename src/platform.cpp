@@ -325,6 +325,35 @@ internal void HandleKeyEvent(SDL_KeyboardEvent key, game_controller_input *Keybo
     }
 }
 
+internal void SDLHandleEvents(SDL_Event *e, sdl_setup *SdlSetup, game_offscreen_buffer *OffscreenBuffer, game_controller_input *NewKeyboardController) 
+{
+    while(SDL_PollEvent(e) != 0)
+    {
+        switch (e->type) 
+        {
+            case SDL_WINDOWEVENT: 
+            {
+                HandleWindowEvent(e->window, SdlSetup, OffscreenBuffer);
+            } break;
+
+            case SDL_QUIT:
+            {
+                Running = false;
+            } break;
+
+            case SDL_KEYDOWN:
+            case SDL_KEYUP: 
+            {
+                #if HITMAN_INTERNAL
+                DebugHandleKeyEvent(e->key, SdlSetup);
+                #endif
+                HandleKeyEvent(e->key, NewKeyboardController);
+            } break;
+        }
+    }
+
+}
+
 internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput) 
 {
     for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex)
@@ -762,30 +791,7 @@ int main(int argc, char *argv[])
             OldKeyboardController->Buttons[ButtonIndex].IsDown;
         }
 
-        while(SDL_PollEvent(&e) != 0)
-        {
-            switch (e.type) 
-            {
-                case SDL_WINDOWEVENT: 
-                {
-                    HandleWindowEvent(e.window, &SdlSetup, &OffscreenBuffer);
-                } break;
-
-                case SDL_QUIT:
-                {
-                    Running = false;
-                } break;
-
-                case SDL_KEYDOWN:
-                case SDL_KEYUP: 
-                {
-                    #if HITMAN_INTERNAL
-                    DebugHandleKeyEvent(e.key, &SdlSetup);
-                    #endif
-                    HandleKeyEvent(e.key, NewKeyboardController);
-                } break;
-            }
-        }
+        SDLHandleEvents(&e, &SdlSetup, &OffscreenBuffer, NewKeyboardController);
 
         HandleControllerEvents(OldInput, NewInput);
 
