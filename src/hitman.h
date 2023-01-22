@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-#include "hitman_defines.h"
+#include "hitman_types.h"
 
 #define MAX_CONTROLLER_COUNT 5
 

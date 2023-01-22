@@ -13,8 +13,6 @@
 
 #include <x86intrin.h>
 
-#include <SDL2/SDL.h>
-
 #include "hitman.h"
 #include "platform.h"
 

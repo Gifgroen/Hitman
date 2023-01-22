@@ -1,7 +1,9 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#include "hitman_defines.h"
+#include "hitman_types.h"
+
+#include <SDL2/SDL.h>
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
