@@ -3,19 +3,13 @@
 
 #include <stdio.h>
 
-#include "hitman_defines.h"
+#include "hitman_types.h"
 
 #define MAX_CONTROLLER_COUNT 5
 
-struct window_dimensions 
-{
-    int Width;
-    int Height;
-};
-
 struct game_offscreen_buffer 
 {
-    window_dimensions Dimensions;
+    v2 Dimensions;
     int BytesPerPixel;
     int Pitch;
 
@@ -24,8 +18,8 @@ struct game_offscreen_buffer
 
 struct game_state 
 {
-    int XOffset;
-    int YOffset;
+    int PlayerX;
+    int PlayerY;
 
     int ToneHz;
 };
@@ -34,15 +28,15 @@ struct game_sound_output_buffer
 {
     int SamplesPerSecond;
     int SampleCount;
-    int16 *Samples;
+    s16 *Samples;
 };
 
 struct game_memory 
 {
-    uint64 PermanentStorageSize;
+    u64 PermanentStorageSize;
     void *PermanentStorage;
     
-    uint64 TransientStorageSize;
+    u64 TransientStorageSize;
     void *TransientStorage;
 };
 

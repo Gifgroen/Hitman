@@ -5,65 +5,77 @@
 void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)
 {
     local_persist real32 tSine;
-    int16 ToneVolume = 3000;
-
+    s16 ToneVolume = 3000;
+#if !HITMAN_INTERNAL
     int ToneHz = GameState->ToneHz > 0 ? GameState->ToneHz : 256;
     int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
-
-    int16 *SampleOut = SoundBuffer->Samples;
+#endif
+    s16 *SampleOut = SoundBuffer->Samples;
     for(int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
     {
         real32 SineValue = sinf(tSine);
-        int16 SampleValue = (int16)(SineValue * ToneVolume);
+        s16 SampleValue = (s16)(SineValue * ToneVolume);
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
     
+#if HITMAN_INTERNAL
+        tSine = 0;
+#else
         tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
         if (tSine > 2.0f * Pi32) 
         {
             tSine -= 2.0f * Pi32;
         }
+#endif
     }
 }
 
-void RenderWeirdGradient(game_offscreen_buffer *Buffer, game_state *State, game_input *Input) 
+internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 origin, v2 Destination, u32 TileValue)
 {
-    window_dimensions Dim = Buffer->Dimensions;
+    Assert(origin.x < Destination.x);
+    Assert(origin.y < Destination.y);
 
-    int Pitch = Buffer->Pitch;
-    
-    uint8 *Row = (uint8 *)Buffer->Pixels;
-    for(int Y = 0; Y < Dim.Height; ++Y)
+    int Width = Destination.x - origin.x;
+    int Height = Destination.y - origin.y;
+    Assert(Width > 0);
+    Assert(Height > 0);
+
+    v2 Dim = Buffer->Dimensions;
+
+    u32 *Pixels = (u32 *)Buffer->Pixels + origin.x + (origin.y * Dim.width);
+    for (int Y = 0; Y < Height; ++Y) 
     {
-        uint32 *Pixel = (uint32 *)Row;
-        for(int X = 0; X < Dim.Width; ++X)
+        for (int X = 0; X < Width; ++X)
         {
-            uint8 Red = 0;
-            uint8 Blue = X + State->XOffset;
-            uint8 Green = Y;
-            
-            *Pixel++ = ((Red << 16) | (Green << 8)) | Blue;
+            *Pixels++ = TileValue;
         }
-        Row += Pitch;
+        Pixels += (Dim.width - Width);
     }
 }
 
-// Note: this has to be fast! It cannot be more then a millisecond!
-// Measure and improve performance here when necessary
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
 {
-    game_state *GameState = (game_state *)GameMemory;
+    int Speed = 5;
+    game_state *GameState = (game_state *)GameMemory->PermanentStorage;
     for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
     {
         game_controller_input *Controller = &(Input->Controllers[i]);
         
         if (Controller->MoveLeft.IsDown) 
         {
-            GameState->XOffset += 10;
+            GameState->PlayerX -= 1 * Speed;
         }
         if (Controller->MoveRight.IsDown)
         {
-            GameState->XOffset -= 10;
+            GameState->PlayerX += 1 * Speed;
+        }
+        if (Controller->MoveUp.IsDown) 
+        {
+            GameState->PlayerY -= 1 * Speed;
+        }
+        if (Controller->MoveDown.IsDown) 
+        {
+            GameState->PlayerY += 1 * Speed;
         }
         real32 AverageY = Controller->StickAverageY;
         if (AverageY != 0)
@@ -72,11 +84,49 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         }
     }
 
-    RenderWeirdGradient(Buffer, GameState, Input);
+    v2 Dim = Buffer->Dimensions;
+    v2 origin = V2(0, 0);
+    DrawRectangle(Buffer, origin, Dim, 0xFF000FF); // Clear the Buffer to weird magenta
+
+    int const XSize = 16;
+    int const YSize = 9;
+
+    local_persist int TileMap [YSize][XSize] = 
+    {
+        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
+        { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
+        { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+        { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+        { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+        { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
+    };
+
+    int TileWidth = 64;
+    int TileHeight = 64;
+    for (int Y = 0; Y < YSize; ++Y) 
+    {
+        for (int X = 0; X < XSize; ++X) 
+        {
+            u32 TileValue = TileMap[Y][X] == 1 ? 0xFFFFFFFF : 0xFF008335;
+
+            int OriginX = X * TileWidth;
+            int OriginY = Y * TileHeight;
+            v2 Origin = V2(OriginX, OriginY);
+            v2 Destination = V2(OriginX + TileWidth, OriginY + TileHeight);
+            DrawRectangle(Buffer, Origin, Destination, TileValue);
+        }
+    }
+
+    v2 PlayerP = V2(GameState->PlayerX, GameState->PlayerY);
+    v2 PlayerDest = V2(PlayerP.x + 32, PlayerP.y + 50);
+    DrawRectangle(Buffer, PlayerP, PlayerDest, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 
 {
-    game_state *GameState = (game_state *)GameMemory;
+    game_state *GameState = (game_state *)GameMemory->PermanentStorage;
     GameOutputSound(SoundBuffer, GameState);
 }
