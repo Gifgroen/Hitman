@@ -7,15 +7,9 @@
 
 #define MAX_CONTROLLER_COUNT 5
 
-struct window_dimensions 
-{
-    int Width;
-    int Height;
-};
-
 struct game_offscreen_buffer 
 {
-    window_dimensions Dimensions;
+    v2 Dimensions;
     int BytesPerPixel;
     int Pitch;
 

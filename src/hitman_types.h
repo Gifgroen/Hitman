@@ -1,3 +1,5 @@
+#ifndef HITMAN_TYPES_H
+#define HITMAN_TYPES_H
 
 #include <stdint.h>
 
@@ -30,3 +32,25 @@ typedef double real64;
 #define MegaByte(Value) (KiloByte(Value) * 1024LL)
 #define GigaByte(Value) (MegaByte(Value) * 1024LL)
 #define TeraByte(Value) (GigaByte(Value) * 1024LL)
+
+union v2 
+{
+    struct 
+    {
+        int x, y;
+    };
+    struct 
+    {
+        int width, height;
+    };
+};
+
+v2 V2(int X, int Y) 
+{
+    v2 Result = {};
+    Result.x = X;
+    Result.y = Y;
+    return Result;
+}
+
+#endif

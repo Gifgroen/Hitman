@@ -30,26 +30,26 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
     }
 }
 
-internal void DrawRectangle(game_offscreen_buffer *Buffer, int originX, s32 originY, s32 destinationX, int destinationY, u32 TileValue)
+internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 origin, s32 destinationX, int destinationY, u32 TileValue)
 {
-    Assert(originX < destinationX);
-    Assert(originY < destinationY);
+    Assert(origin.x < destinationX);
+    Assert(origin.y < destinationY);
 
-    int Width = destinationX - originX;
-    int Height = destinationY - originY;
+    int Width = destinationX - origin.x;
+    int Height = destinationY - origin.y;
     Assert(Width > 0);
     Assert(Height > 0);
 
-    window_dimensions Dim = Buffer->Dimensions;
+    v2 Dim = Buffer->Dimensions;
 
-    u32 *Pixels = (u32 *)Buffer->Pixels + originX + (originY * Dim.Width);
+    u32 *Pixels = (u32 *)Buffer->Pixels + origin.x + (origin.y * Dim.width);
     for (int Y = 0; Y < Height; ++Y) 
     {
         for (int X = 0; X < Width; ++X)
         {
             *Pixels++ = TileValue;
         }
-        Pixels += (Dim.Width - Width);
+        Pixels += (Dim.width - Width);
     }
 }
 
@@ -84,8 +84,9 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         }
     }
 
-    window_dimensions Dim = Buffer->Dimensions;
-    DrawRectangle(Buffer, 0, 0, Dim.Width, Dim.Height, 0xFF000FF); // Clear the Buffer to weird magenta
+    v2 Dim = Buffer->Dimensions;
+    v2 origin = V2(0, 0);
+    DrawRectangle(Buffer, origin, Dim.width, Dim.height, 0xFF000FF); // Clear the Buffer to weird magenta
 
     int const XSize = 16;
     int const YSize = 9;
@@ -113,14 +114,14 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
 
             int OriginX = X * TileWidth;
             int OriginY = Y * TileHeight;
-            DrawRectangle(Buffer, OriginX, OriginY, OriginX + TileWidth, OriginY + TileHeight, TileValue);
+            v2 Origin = V2(OriginX, OriginY);
+            DrawRectangle(Buffer, Origin, OriginX + TileWidth, OriginY + TileHeight, TileValue);
         }
     }
 
-    int PlayerX = GameState->PlayerX;
-    int PlayerY = GameState->PlayerY;
-    printf("player: (%d, %d)\n", PlayerX, PlayerY);
-    DrawRectangle(Buffer, PlayerX, PlayerY, PlayerX + 32, PlayerY + 50, 0xFF0000FF);
+    v2 PlayerP = V2(GameState->PlayerX, GameState->PlayerY);
+    printf("player: (%d, %d)\n", PlayerP.x, PlayerP.y);
+    DrawRectangle(Buffer, PlayerP, PlayerP.x + 32, PlayerP.y + 50, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 

@@ -24,15 +24,15 @@ global bool Running = true;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
-    window_dimensions Dim = Buffer->Dimensions;
+    v2 Dim = Buffer->Dimensions;
     int Size = Dim.Height * Buffer->Pitch;
     Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 #else 
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
-    window_dimensions Dim = Buffer->Dimensions;
-    int Size = Dim.Height * Buffer->Pitch;
+    v2 Dim = Buffer->Dimensions;
+    int Size = Dim.height * Buffer->Pitch;
     Buffer->Pixels = mmap(0, Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 }
 #endif
@@ -46,13 +46,13 @@ internal void Dealloc(game_offscreen_buffer *Buffer)
 #else 
 internal void Dealloc(game_offscreen_buffer *Buffer) 
 {
-    window_dimensions Dim = Buffer->Dimensions;
-    int Result = munmap(Buffer->Pixels, Dim.Height * Buffer->Pitch);
+    v2 Dim = Buffer->Dimensions;
+    int Result = munmap(Buffer->Pixels, Dim.height * Buffer->Pitch);
     Assert(Result == 0);
 }
 #endif
 
-internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, window_dimensions NewDimensions)
+internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, v2 NewDimensions)
 {
     if (Setup->WindowTexture) 
     {
@@ -65,20 +65,20 @@ internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_b
         Dealloc(Buffer);
     }
 
-    int Width = NewDimensions.Width;
-    int Height = NewDimensions.Height; 
+    int Width = NewDimensions.width;
+    int Height = NewDimensions.height; 
     Setup->WindowTexture = SDL_CreateTexture(Setup->Renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, Width, Height);
 
-    Buffer->Dimensions = { Width, Height };
+    Buffer->Dimensions = V2(Width, Height);
     Buffer->Pitch = Width * Buffer->BytesPerPixel;
 
     Alloc(Buffer);
 }
 
-internal window_dimensions GetWindowDimensions(SDL_Window *Window) 
+internal v2 GetWindowDimensions(SDL_Window *Window) 
 {
-    window_dimensions Result = {};
-    SDL_GetWindowSize(Window, &Result.Width, &Result.Height);
+    v2 Result = {};
+    SDL_GetWindowSize(Window, &Result.width, &Result.height);
     return Result;
 }
 
@@ -120,12 +120,12 @@ internal void SDLDebugSyncDisplay(
     int PadX = 16;
     int PadY = 16;
 
-    window_dimensions Dimensions = Buffer->Dimensions;
-    int Width = Dimensions.Width;
+    v2 Dimensions = Buffer->Dimensions;
+    int Width = Dimensions.width;
     real32 PixelsPerByte = (real32)(Width - (2 * PadX)) / (real32)SoundOutput->SecondaryBufferSize;
 
     int Top = PadY;
-    int Bottom = Dimensions.Height - PadY;
+    int Bottom = Dimensions.height - PadY;
 
     for (int MarkerIndex = 0; MarkerIndex < DebugTimeMarkerCount; ++MarkerIndex)
     {
@@ -197,13 +197,13 @@ internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, game_offscr
         {
             int NewWidth = e.data1;
             int NewHeight = e.data2;
-            window_dimensions NewDimensions = { NewWidth, NewHeight };
+            v2 NewDimensions = V2(NewWidth, NewHeight);
             UpdateOffscreenBufferDimensions(Setup, Buffer, NewDimensions);
         } break;
 
         case SDL_WINDOWEVENT_EXPOSED: 
         {
-            window_dimensions KnownDimensions = GetWindowDimensions(Setup->Window);
+            v2 KnownDimensions = GetWindowDimensions(Setup->Window);
             UpdateOffscreenBufferDimensions(Setup, Buffer, KnownDimensions);
         } break;
     }
@@ -487,10 +487,10 @@ internal int LoadGameCode(game_code *GameCode)
     return 0;
 }
 
-internal void SdlSetupWindow(sdl_setup *Setup, window_dimensions Dimensions) 
+internal void SdlSetupWindow(sdl_setup *Setup, v2 Dimensions) 
 {
     u32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
-    Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
+    Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.width, Dimensions.height, WindowFlags);
     Assert(Setup->Window);
 
     Setup->Renderer = SDL_CreateRenderer(Setup->Window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
@@ -692,7 +692,7 @@ int main(int argc, char *argv[])
 
     local_persist sdl_setup SdlSetup = {};
 
-    window_dimensions Dimensions = { 1280, 1024 };
+    v2 Dimensions = V2(1280, 1024);
     SdlSetupWindow(&SdlSetup, Dimensions);
 
     int const GameUpdateHz = 30;
