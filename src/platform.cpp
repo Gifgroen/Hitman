@@ -84,13 +84,13 @@ internal window_dimensions GetWindowDimensions(SDL_Window *Window)
     return Result;
 }
 
-internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, uint32 Color)
+internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, u32 Color)
 {
     int Pitch = Buffer->Pitch;
-    uint8 *Pixel = ((uint8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
+    u8 *Pixel = ((u8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
     for(int Y = Top; Y < Bottom; ++Y)
     {
-        *(uint32 *)Pixel = Color;
+        *(u32 *)Pixel = Color;
         Pixel += Pitch;
     }
 }
@@ -103,7 +103,7 @@ inline void SDLDrawSoundBufferMarker(
     int Top, 
     int Bottom,
     int Value, 
-    uint32 Color
+    u32 Color
 ) {
     Assert(Value < SoundOutput->SecondaryBufferSize);
     real32 XReal32 = (C * (real32)Value);
@@ -180,7 +180,7 @@ internal void OpenInputControllers()
     }
 }
 
-internal real32 GetSecondsElapsed(uint64 OldCounter, uint64 CurrentCounter)
+internal real32 GetSecondsElapsed(u64 OldCounter, u64 CurrentCounter)
 {
     return ((real32)(CurrentCounter - OldCounter) / (real32)(SDL_GetPerformanceFrequency()));
 }
@@ -224,7 +224,7 @@ internal void SDLProcessGameControllerButton(game_button_state *OldState, game_b
     NewState->HalfTransitionCount += ((NewState->IsDown == OldState->IsDown) ? 0 : 1);
 }
 
-internal real32 SDLProcessGameControllerAxisValue(int16 Value, int16 DeadZoneThreshold)
+internal real32 SDLProcessGameControllerAxisValue(s16 Value, s16 DeadZoneThreshold)
 {
     real32 Result = 0;
 
@@ -249,10 +249,10 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup)
 
     if (Event.repeat == 0) 
     {
-        uint32 mod = Event.keysym.mod;
+        u32 mod = Event.keysym.mod;
         if (IsDown && (KeyCode == SDLK_RETURN && (mod & KMOD_CTRL)))
         {
-            uint32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
+            u32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
             bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
             SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
         }
@@ -396,11 +396,11 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFrame) 
+internal void TryWaitForNextFrame(u64 LastCounter, real64 TargetSecondsPerFrame) 
 {
     if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
     {
-        int32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 1;
+        s32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 1;
         if (TimeToSleep > 0)
         {
             SDL_Delay(TimeToSleep);
@@ -417,7 +417,7 @@ internal void TryWaitForNextFrame(uint64 LastCounter, real64 TargetSecondsPerFra
     }
 }
 
-internal int64 GameCodeChanged(game_code *GameCode) 
+internal s64 GameCodeChanged(game_code *GameCode) 
 {
     char const *Filename = GameCode->LibPath;
     struct stat Result;
@@ -462,7 +462,7 @@ internal int LoadGameCode(game_code *GameCode)
 
 internal void SdlSetupWindow(sdl_setup *Setup, window_dimensions Dimensions) 
 {
-    uint32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    u32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
     Setup->Window = SDL_CreateWindow("Hitman", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, Dimensions.Width, Dimensions.Height, WindowFlags);
     Assert(Setup->Window);
 
@@ -493,7 +493,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
         SDL_DestroyWindow(Setup->Window);
 	    Setup->Window = NULL;
     }
-    for (uint64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    for (u64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
     {
         if (ControllerHandles[i]) 
         {
@@ -508,7 +508,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
     bool Result = VirtualFree(GameMemory->PermanentStorage, 0, MEM_RELEASE);
     Assert(Result);
 #else
-    uint64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
+    u64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
     int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
     Assert(Result == 0);
 #endif
@@ -516,7 +516,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
     SDL_Quit();
 }
 
-internal void SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
+internal void SDLAudioCallback(void *UserData, u8 *AudioData, int Length)
 {
     sdl_audio_ring_buffer *RingBuffer = (sdl_audio_ring_buffer *)UserData;
 
@@ -527,13 +527,13 @@ internal void SDLAudioCallback(void *UserData, Uint8 *AudioData, int Length)
         Region1Size = RingBuffer->Size - RingBuffer->PlayCursor;
         Region2Size = Length - Region1Size;
     }
-    memcpy(AudioData, (uint8*)(RingBuffer->Data) + RingBuffer->PlayCursor, Region1Size);
+    memcpy(AudioData, (u8*)(RingBuffer->Data) + RingBuffer->PlayCursor, Region1Size);
     memcpy(&AudioData[Region1Size], RingBuffer->Data, Region2Size);
     RingBuffer->PlayCursor = (RingBuffer->PlayCursor + Length) % RingBuffer->Size;
     RingBuffer->WriteCursor = (RingBuffer->PlayCursor + Length) % RingBuffer->Size;
 }
 
-internal void InitAudio(int32 SamplesPerSecond, int32 BufferSize)
+internal void InitAudio(s32 SamplesPerSecond, s32 BufferSize)
 {
     SDL_AudioSpec AudioSettings = {0};
 
@@ -561,9 +561,9 @@ internal void InitAudio(int32 SamplesPerSecond, int32 BufferSize)
 
 internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int BytesToWrite, game_sound_output_buffer *SoundBuffer)
 {
-    int16 *Samples = SoundBuffer->Samples;
+    s16 *Samples = SoundBuffer->Samples;
 
-    void *Region1 = (uint8 *)AudioRingBuffer.Data + ByteToLock;
+    void *Region1 = (u8 *)AudioRingBuffer.Data + ByteToLock;
     int Region1Size = BytesToWrite;
     if (Region1Size + ByteToLock > SoundOutput->SecondaryBufferSize)
     {
@@ -572,7 +572,7 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     void *Region2 = AudioRingBuffer.Data;
     int Region2Size = BytesToWrite - Region1Size;
     int Region1SampleCount = Region1Size / SoundOutput->BytesPerSample;
-    int16 *SampleOut = (int16 *)Region1;
+    s16 *SampleOut = (s16 *)Region1;
     for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
     {
         *SampleOut++ = *Samples++;
@@ -582,7 +582,7 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 
     int Region2SampleCount = Region2Size / SoundOutput->BytesPerSample;
-    SampleOut = (int16 *)Region2;
+    SampleOut = (s16 *)Region2;
     for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
     {
         *SampleOut++ = *Samples++;
@@ -610,7 +610,7 @@ internal debug_read_file_result DebugReadEntireFile(char const *Filename)
         FILE *File = fopen(Filename, "r");
         if (File != NULL) 
         {
-            int64 Size = Stat.st_size;
+            s64 Size = Stat.st_size;
             Result.ContentSize = Size;
             Result.Content = malloc(Size);
             if(Result.Content)
@@ -627,7 +627,7 @@ internal debug_read_file_result DebugReadEntireFile(char const *Filename)
     return Result;
 }
 
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, uint64 Length) 
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
 {
     FILE * File = fopen (Filename, "w");
     if (File == NULL) 
@@ -635,7 +635,7 @@ internal bool DebugWriteEntireFile(char const *Filename, char const *Content, ui
         return false;
     }
 
-    uint64 Written = fwrite(Content, 1, Length, File);
+    u64 Written = fwrite(Content, 1, Length, File);
     fclose(File);
     return Length == Written;
 }
@@ -652,7 +652,7 @@ int main(int argc, char *argv[])
     LoadGameCode(&GameCode);
 
     // REGION - Platform using SDL
-    uint32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER;
+    u32 SubSystemFlags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER;
     if (SDL_Init(SubSystemFlags)) 
     {
         printf("Failed initialising subsystems! %s\n", SDL_GetError());
@@ -660,7 +660,7 @@ int main(int argc, char *argv[])
     }
     
 #if HITMAN_DEBUG
-    uint64 PerfCountFrequency = SDL_GetPerformanceFrequency();
+    u64 PerfCountFrequency = SDL_GetPerformanceFrequency();
 #endif
 
     local_persist sdl_setup SdlSetup = {};
@@ -683,19 +683,19 @@ int main(int argc, char *argv[])
     SoundOutput.ToneVolume = 3000;
     SoundOutput.RunningSampleIndex = 0;
     SoundOutput.WavePeriod = SoundOutput.SamplesPerSecond / SoundOutput.ToneHz;
-    SoundOutput.BytesPerSample = sizeof(int16) * 2;
+    SoundOutput.BytesPerSample = sizeof(s16) * 2;
     SoundOutput.SecondaryBufferSize = SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample;
     // TODO: compute variance in the frame time so we can choose what the lowest reasonable value is.
     SoundOutput.SafetyBytes = 0.25 * ((SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample) / GameUpdateHz);
 
     InitAudio(SoundOutput.SamplesPerSecond, SoundOutput.SecondaryBufferSize);
-    int16 *Samples = (int16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
+    s16 *Samples = (s16 *)calloc(SoundOutput.SamplesPerSecond, SoundOutput.BytesPerSample);
     bool SoundIsPlaying = false;
 
     OpenInputControllers();
 
     game_offscreen_buffer OffscreenBuffer = {};
-    OffscreenBuffer.BytesPerPixel = sizeof(uint32);
+    OffscreenBuffer.BytesPerPixel = sizeof(u32);
     // Initial sizing of the game screen.
     UpdateOffscreenBufferDimensions(&SdlSetup, &OffscreenBuffer, Dimensions);
 
@@ -713,13 +713,13 @@ int main(int argc, char *argv[])
     void *BaseAddress = (void *)(0);
 #endif
 
-    uint64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    u64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 #else 
     GameMemory.PermanentStorage = mmap(BaseAddress, TotalStorageSize, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
 #endif    
-    GameMemory.TransientStorage = (uint8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
+    GameMemory.TransientStorage = (u8*)(GameMemory.PermanentStorage) + GameMemory.PermanentStorageSize;
     Assert(GameMemory.PermanentStorage);
     Assert(GameMemory.TransientStorage);
     
@@ -743,12 +743,12 @@ int main(int argc, char *argv[])
 
 #if HITMAN_INTERNAL
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
-    uint64 DebugLastPlayCursorIndex = 0;
+    u64 DebugLastPlayCursorIndex = 0;
 #endif
-    uint64 LastCounter = SDL_GetPerformanceCounter(); 
+    u64 LastCounter = SDL_GetPerformanceCounter(); 
 
 #if HITMAN_DEBUG
-    uint64 LastCycleCount = _rdtsc();
+    u64 LastCycleCount = _rdtsc();
 #endif
 
     SDL_Event e;
@@ -758,7 +758,7 @@ int main(int argc, char *argv[])
         game_controller_input *OldKeyboardController = GetControllerForIndex(OldInput, 0);
         game_controller_input *NewKeyboardController = GetControllerForIndex(NewInput, 0);
         *NewKeyboardController = {};
-        for(uint64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
+        for(u64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
         {
             NewKeyboardController->Buttons[ButtonIndex].IsDown =
             OldKeyboardController->Buttons[ButtonIndex].IsDown;
@@ -895,7 +895,7 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG
         // Get this before UpdateWindow() so that we don't keep missing VBlanks.
-        uint64 EndCounter = SDL_GetPerformanceCounter();
+        u64 EndCounter = SDL_GetPerformanceCounter();
 #endif
 
 #if HITMAN_INTERNAL
@@ -918,9 +918,9 @@ int main(int argc, char *argv[])
 
 #if HITMAN_DEBUG 
         // Calculate frame timings.
-        uint64 EndCycleCount = _rdtsc();
-        int64 CounterElapsed = EndCounter - LastCounter;
-        uint64 CyclesElapsed = EndCycleCount - LastCycleCount;
+        u64 EndCycleCount = _rdtsc();
+        s64 CounterElapsed = EndCounter - LastCounter;
+        u64 CyclesElapsed = EndCycleCount - LastCycleCount;
 
         real64 MSPerFrame = (((1000.0f * (real64)CounterElapsed) / (real64)PerfCountFrequency));
         real64 FPS = (real64)PerfCountFrequency / (real64)CounterElapsed;

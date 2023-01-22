@@ -16,8 +16,8 @@ struct sdl_sound_output
 {
     int SamplesPerSecond;
     int ToneHz;
-    int16 ToneVolume;
-    uint32 RunningSampleIndex;
+    s16 ToneVolume;
+    u32 RunningSampleIndex;
     int WavePeriod;
     int BytesPerSample;
     int SecondaryBufferSize;
@@ -46,7 +46,7 @@ struct game_code
 {
     char const *LibPath;
     void* LibHandle;
-    int64 LastWriteTime;
+    s64 LastWriteTime;
 
     GameUpdateAndRender_t GameUpdateAndRender;
     GameGetSoundSamples_t GameGetSoundSamples;
@@ -54,7 +54,7 @@ struct game_code
 
 struct debug_read_file_result
 {
-    uint32 ContentSize;
+    u32 ContentSize;
     void *Content;
 };
 

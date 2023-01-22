@@ -34,15 +34,15 @@ struct game_sound_output_buffer
 {
     int SamplesPerSecond;
     int SampleCount;
-    int16 *Samples;
+    s16 *Samples;
 };
 
 struct game_memory 
 {
-    uint64 PermanentStorageSize;
+    u64 PermanentStorageSize;
     void *PermanentStorage;
     
-    uint64 TransientStorageSize;
+    u64 TransientStorageSize;
     void *TransientStorage;
 };
 
