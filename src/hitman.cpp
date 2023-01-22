@@ -30,13 +30,13 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
     }
 }
 
-internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 origin, s32 destinationX, int destinationY, u32 TileValue)
+internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 origin, v2 Destination, u32 TileValue)
 {
-    Assert(origin.x < destinationX);
-    Assert(origin.y < destinationY);
+    Assert(origin.x < Destination.x);
+    Assert(origin.y < Destination.y);
 
-    int Width = destinationX - origin.x;
-    int Height = destinationY - origin.y;
+    int Width = Destination.x - origin.x;
+    int Height = Destination.y - origin.y;
     Assert(Width > 0);
     Assert(Height > 0);
 
@@ -86,7 +86,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
 
     v2 Dim = Buffer->Dimensions;
     v2 origin = V2(0, 0);
-    DrawRectangle(Buffer, origin, Dim.width, Dim.height, 0xFF000FF); // Clear the Buffer to weird magenta
+    DrawRectangle(Buffer, origin, Dim, 0xFF000FF); // Clear the Buffer to weird magenta
 
     int const XSize = 16;
     int const YSize = 9;
@@ -115,13 +115,14 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
             int OriginX = X * TileWidth;
             int OriginY = Y * TileHeight;
             v2 Origin = V2(OriginX, OriginY);
-            DrawRectangle(Buffer, Origin, OriginX + TileWidth, OriginY + TileHeight, TileValue);
+            v2 Destination = V2(OriginX + TileWidth, OriginY + TileHeight);
+            DrawRectangle(Buffer, Origin, Destination, TileValue);
         }
     }
 
     v2 PlayerP = V2(GameState->PlayerX, GameState->PlayerY);
-    printf("player: (%d, %d)\n", PlayerP.x, PlayerP.y);
-    DrawRectangle(Buffer, PlayerP, PlayerP.x + 32, PlayerP.y + 50, 0xFF0000FF);
+    v2 PlayerDest = V2(PlayerP.x + 32, PlayerP.y + 50);
+    DrawRectangle(Buffer, PlayerP, PlayerDest, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 
