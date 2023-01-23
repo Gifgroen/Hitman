@@ -30,19 +30,19 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
     }
 }
 
-internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 origin, v2 Destination, u32 TileValue)
+internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destination, u32 TileValue)
 {
-    Assert(origin.x < Destination.x);
-    Assert(origin.y < Destination.y);
+    Assert(Origin.x < Destination.x);
+    Assert(Origin.y < Destination.y);
 
-    int Width = Destination.x - origin.x;
-    int Height = Destination.y - origin.y;
+    int Width = Destination.x - Origin.x;
+    int Height = Destination.y - Origin.y;
     Assert(Width > 0);
     Assert(Height > 0);
 
     v2 Dim = Buffer->Dimensions;
 
-    u32 *Pixels = (u32 *)Buffer->Pixels + origin.x + (origin.y * Dim.width);
+    u32 *Pixels = (u32 *)Buffer->Pixels + Origin.x + (Origin.y * Dim.width);
     for (int Y = 0; Y < Height; ++Y) 
     {
         for (int X = 0; X < Width; ++X)
@@ -84,14 +84,13 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         }
     }
 
-    v2 Dim = Buffer->Dimensions;
-    v2 origin = V2(0, 0);
-    DrawRectangle(Buffer, origin, Dim, 0xFF000FF); // Clear the Buffer to weird magenta
+    v2 Origin = V2(0, 0);
+    v2 ScreenSize = Buffer->Dimensions;
+    DrawRectangle(Buffer, Origin, ScreenSize, 0xFF000FF); // Clear the Buffer to weird magenta
 
     int const XSize = 16;
     int const YSize = 9;
-
-    local_persist int TileMap [YSize][XSize] = 
+    local_persist int TileMap[YSize][XSize] = 
     {
         { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
         { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
