@@ -66,6 +66,8 @@ struct debug_input_recording
 
     FILE *RecordHandle;
     FILE *PlaybackHandle;
+
+    u64 TotalMemorySize;
 };
 
 #endif

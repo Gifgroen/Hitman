@@ -677,20 +677,22 @@ internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u6
 #endif
 
 #if HITMAN_INTERNAL
-internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput)
+internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
 {
     // Setup Input recording, 
     if (InputRecorder->RecordHandle == NULL)
     {
-        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w+");
+        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
+        u64 TotalStorageSize = InputRecorder->TotalMemorySize;
+        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalStorageSize, InputRecorder->RecordHandle);
+        Assert(TotalStorageSize == Written);
     }
-    // Store GameMemory
-    // Store NewInput
-    u64 Written = fwrite(NewInput, sizeof(*NewInput), 1, InputRecorder->RecordHandle);
-    printf("Written: %llu\n", Written);
+    u64 InputSize = sizeof(*NewInput);
+    u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
+    Assert(InputSize == Written);
 }
 
-internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput)
+internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
 {
     if (InputRecorder->RecordHandle != NULL)
     {
@@ -700,12 +702,14 @@ internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_inpu
     if (InputRecorder->PlaybackHandle == NULL)
     {
         InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
+        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
+        fread(GameMemory->PermanentStorage, TotalMemorySize, 1, InputRecorder->PlaybackHandle);
     }
-    u64 Read = fread(NewInput, 1, sizeof(game_input), InputRecorder->PlaybackHandle);
-    printf("Read: %llu\n", Read);
+    u64 InputSize = sizeof(game_input);
+    u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
     if (Read == 0)
     {
-        InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
+        InputRecorder->PlaybackHandle = NULL;
     }
 }
 #endif
@@ -785,6 +789,7 @@ int main(int argc, char *argv[])
 #endif
 
     u64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    InputRecorder.TotalMemorySize = TotalStorageSize;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 #else 
@@ -830,11 +835,11 @@ int main(int argc, char *argv[])
 #if HITMAN_INTERNAL
         if (InputRecorder.ActionIndex == 1) 
         {
-            DebugRecordInput(&InputRecorder, NewInput);
+            DebugRecordInput(&InputRecorder, NewInput, &GameMemory);
         } 
         if (InputRecorder.ActionIndex == 2)
         {
-            DebugPlaybackInput(&InputRecorder, NewInput);
+            DebugPlaybackInput(&InputRecorder, NewInput, &GameMemory);
         }
 #endif
 
