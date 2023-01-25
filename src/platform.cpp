@@ -25,7 +25,7 @@ global bool Running = true;
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
     v2 Dim = Buffer->Dimensions;
-    int Size = Dim.Height * Buffer->Pitch;
+    int Size = Dim.height * Buffer->Pitch;
     Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 #else 
