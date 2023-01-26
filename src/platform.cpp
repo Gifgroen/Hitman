@@ -683,9 +683,12 @@ internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input 
     if (InputRecorder->RecordHandle == NULL)
     {
         InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
-        u64 TotalStorageSize = InputRecorder->TotalMemorySize;
-        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalStorageSize, InputRecorder->RecordHandle);
-        Assert(TotalStorageSize == Written);
+        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
+
+        u32 BytesToWrite = (u32)InputRecorder->TotalMemorySize;
+        Assert(TotalMemorySize == BytesToWrite); // This can't be more then 4Gb, because then we cannot write it to a file at once.
+        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalMemorySize, InputRecorder->RecordHandle);
+        Assert(BytesToWrite == Written);
     }
     u64 InputSize = sizeof(*NewInput);
     u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
@@ -702,8 +705,9 @@ internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_inpu
     if (InputRecorder->PlaybackHandle == NULL)
     {
         InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
-        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
-        fread(GameMemory->PermanentStorage, TotalMemorySize, 1, InputRecorder->PlaybackHandle);
+        u32 BytesToRead = (u32)InputRecorder->TotalMemorySize;
+        Assert(InputRecorder->TotalMemorySize == BytesToRead); // This can't be more then 4Gb on Windows with Live loop, because we cannot write it to a file at once.
+        fread(GameMemory->PermanentStorage, BytesToRead, 1, InputRecorder->PlaybackHandle);
     }
     u64 InputSize = sizeof(game_input);
     u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
@@ -778,7 +782,7 @@ int main(int argc, char *argv[])
 
     game_memory GameMemory = {};
     GameMemory.PermanentStorageSize = MegaByte(64);
-    GameMemory.TransientStorageSize = GigaByte(4);
+    GameMemory.TransientStorageSize = GigaByte(1);
 
     debug_input_recording InputRecorder = {};
 
