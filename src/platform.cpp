@@ -239,7 +239,7 @@ internal real32 SDLProcessGameControllerAxisValue(s16 Value, s16 DeadZoneThresho
 }
 
 #if HITMAN_INTERNAL
-internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording)
+internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController)
 {
     SDL_Keycode KeyCode = Event.keysym.sym;
 
@@ -260,6 +260,13 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, deb
             if (Recording->ActionIndex > 2)
             {
                 Recording->ActionIndex = 0;
+                // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
+                for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
+                {
+                    game_button_state *Btn = &(KeyboardController->Buttons[ButtonIndex]);
+                    Btn->IsDown = false;
+                    Btn->HalfTransitionCount = 0;
+                }
             }
         }
     }
@@ -353,7 +360,7 @@ internal void SDLHandleEvents(SDL_Event *e, sdl_setup *SdlSetup, game_offscreen_
             case SDL_KEYUP: 
             {
                 #if HITMAN_INTERNAL
-                DebugHandleKeyEvent(e->key, SdlSetup, InputRecording);
+                DebugHandleKeyEvent(e->key, SdlSetup, InputRecording, NewKeyboardController);
                 #endif
                 HandleKeyEvent(e->key, NewKeyboardController);
             } break;
@@ -828,8 +835,8 @@ int main(int argc, char *argv[])
         *NewKeyboardController = {};
         for(u64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
         {
-            NewKeyboardController->Buttons[ButtonIndex].IsDown =
-            OldKeyboardController->Buttons[ButtonIndex].IsDown;
+            NewKeyboardController->Buttons[ButtonIndex].IsDown = OldKeyboardController->Buttons[ButtonIndex].IsDown;
+            NewKeyboardController->Buttons[ButtonIndex].HalfTransitionCount = OldKeyboardController->Buttons[ButtonIndex].HalfTransitionCount;
         }
 
         SDLHandleEvents(&e, &SdlSetup, &OffscreenBuffer, NewKeyboardController, &InputRecorder);
