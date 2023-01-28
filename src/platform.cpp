@@ -259,6 +259,17 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, deb
             ++Recording->ActionIndex;
             if (Recording->ActionIndex > 2)
             {
+                if (Recording->RecordHandle) 
+                {
+                    fclose(Recording->RecordHandle);
+                    Recording->RecordHandle = NULL;
+                }
+                if (Recording->PlaybackHandle) 
+                {
+                    fclose(Recording->PlaybackHandle);
+                    Recording->PlaybackHandle = NULL;
+                }
+
                 Recording->ActionIndex = 0;
                 // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
                 for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
