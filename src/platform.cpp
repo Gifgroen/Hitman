@@ -25,7 +25,7 @@ global bool Running = true;
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
     v2 Dim = Buffer->Dimensions;
-    int Size = Dim.Height * Buffer->Pitch;
+    int Size = Dim.height * Buffer->Pitch;
     Buffer->Pixels = VirtualAlloc(NULL, Size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 }
 #else 
@@ -238,8 +238,126 @@ internal real32 SDLProcessGameControllerAxisValue(s16 Value, s16 DeadZoneThresho
     return(Result);
 }
 
+
+#if HITMAN_INTERNAL // DEBUG I/O
+internal void DebugFreeFileMemory(void *Memory)
+{
+    if (Memory)
+    {
+        free(Memory);
+    }
+}
+
+internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
+{
+    debug_read_file_result Result = {};
+    struct stat Stat;
+    if (stat(Filename, &Stat) == 0) 
+    {
+        FILE *File = fopen(Filename, "r");
+        if (File != NULL) 
+        {
+            s64 Size = Stat.st_size;
+            Result.ContentSize = Size;
+            Result.Content = malloc(Size);
+            if(Result.Content)
+            {
+                fread(Result.Content, Size, 1, File);
+                fclose(File);
+            } 
+            else 
+            {
+                DebugFreeFileMemory(Result.Content);
+            }
+        }
+    }
+    return Result;
+}
+
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
+{
+    FILE * File = fopen (Filename, "w");
+    if (File == NULL) 
+    {
+        return false;
+    }
+
+    u64 Written = fwrite(Content, 1, Length, File);
+    fclose(File);
+    return Length == Written;
+}
+#endif
+
+#if HITMAN_INTERNAL // Looped Input recording
+internal void DebugBeginRecordInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
+{
+    // Setup Input recording, 
+    if (InputRecorder->RecordHandle == NULL)
+    {
+        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
+        
+        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
+        u32 BytesToWrite = (u32)InputRecorder->TotalMemorySize;
+        Assert(TotalMemorySize == BytesToWrite); // This can't be more then 4Gb, because then we cannot write it to a file at once.
+        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalMemorySize, InputRecorder->RecordHandle);
+        Assert(BytesToWrite == Written);
+    }
+}
+
+internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
+{
+    DebugBeginRecordInput(InputRecorder, GameMemory);
+
+    u64 InputSize = sizeof(*NewInput);
+    u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
+    Assert(InputSize == Written);
+}
+
+internal void DebugEndRecordInput(debug_input_recording *InputRecorder)
+{
+    if (InputRecorder->RecordHandle != NULL)
+    {
+        fclose(InputRecorder->RecordHandle);
+        InputRecorder->RecordHandle = NULL;
+    }
+}
+
+internal void DebugBeginPlaybackInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
+{
+    if (InputRecorder->PlaybackHandle == NULL)
+    {
+        InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
+        u32 BytesToRead = (u32)InputRecorder->TotalMemorySize;
+        Assert(InputRecorder->TotalMemorySize == BytesToRead); // This can't be more then 4Gb on Windows with Live loop, because we cannot write it to a file at once.
+        fread(GameMemory->PermanentStorage, BytesToRead, 1, InputRecorder->PlaybackHandle);
+    }
+}
+
+internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
+{
+    DebugBeginPlaybackInput(InputRecorder, GameMemory);
+
+    u64 InputSize = sizeof(game_input);
+    u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
+    
+    if (Read == 0)
+    {
+        InputRecorder->PlaybackHandle = NULL;
+    }
+}
+
+internal void DebugEndPlaybackInput(debug_input_recording *InputRecorder)
+{
+    if (InputRecorder->PlaybackHandle != NULL)
+    {
+        fclose(InputRecorder->PlaybackHandle);
+        InputRecorder->PlaybackHandle = NULL;
+    }
+}
+#endif
+
 #if HITMAN_INTERNAL
-internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup)
+internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController)
 {
     SDL_Keycode KeyCode = Event.keysym.sym;
 
@@ -253,6 +371,24 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup)
             u32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
             bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
             SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
+        }
+        else if (IsDown && KeyCode == SDLK_l)
+        {
+            ++Recording->ActionIndex;
+            if (Recording->ActionIndex > 2)
+            {
+                DebugEndRecordInput(Recording);
+                DebugEndPlaybackInput(Recording);
+            
+                Recording->ActionIndex = 0;
+                // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
+                for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
+                {
+                    game_button_state *Btn = &(KeyboardController->Buttons[ButtonIndex]);
+                    Btn->IsDown = false;
+                    Btn->HalfTransitionCount = 0;
+                }
+            }
         }
     }
 }
@@ -325,7 +461,7 @@ internal void HandleKeyEvent(SDL_KeyboardEvent key, game_controller_input *Keybo
     }
 }
 
-internal void SDLHandleEvents(SDL_Event *e, sdl_setup *SdlSetup, game_offscreen_buffer *OffscreenBuffer, game_controller_input *NewKeyboardController) 
+internal void SDLHandleEvents(SDL_Event *e, sdl_setup *SdlSetup, game_offscreen_buffer *OffscreenBuffer, game_controller_input *NewKeyboardController, debug_input_recording *InputRecording) 
 {
     while(SDL_PollEvent(e) != 0)
     {
@@ -345,7 +481,7 @@ internal void SDLHandleEvents(SDL_Event *e, sdl_setup *SdlSetup, game_offscreen_
             case SDL_KEYUP: 
             {
                 #if HITMAN_INTERNAL
-                DebugHandleKeyEvent(e->key, SdlSetup);
+                DebugHandleKeyEvent(e->key, SdlSetup, InputRecording, NewKeyboardController);
                 #endif
                 HandleKeyEvent(e->key, NewKeyboardController);
             } break;
@@ -619,55 +755,6 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
-#if HITMAN_INTERNAL // DEBUG I/O
-internal void DebugFreeFileMemory(void *Memory)
-{
-    if (Memory)
-    {
-        free(Memory);
-    }
-}
-
-internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
-{
-    debug_read_file_result Result = {};
-    struct stat Stat;
-    if (stat(Filename, &Stat) == 0) 
-    {
-        FILE *File = fopen(Filename, "r");
-        if (File != NULL) 
-        {
-            s64 Size = Stat.st_size;
-            Result.ContentSize = Size;
-            Result.Content = malloc(Size);
-            if(Result.Content)
-            {
-                fread(Result.Content, Size, 1, File);
-                fclose(File);
-            } 
-            else 
-            {
-                DebugFreeFileMemory(Result.Content);
-            }
-        }
-    }
-    return Result;
-}
-
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
-{
-    FILE * File = fopen (Filename, "w");
-    if (File == NULL) 
-    {
-        return false;
-    }
-
-    u64 Written = fwrite(Content, 1, Length, File);
-    fclose(File);
-    return Length == Written;
-}
-#endif
-
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -732,7 +819,9 @@ int main(int argc, char *argv[])
 
     game_memory GameMemory = {};
     GameMemory.PermanentStorageSize = MegaByte(64);
-    GameMemory.TransientStorageSize = GigaByte(4);
+    GameMemory.TransientStorageSize = GigaByte(1);
+
+    debug_input_recording InputRecorder = {};
 
 #if HITMAN_INTERNAL
     void *BaseAddress = (void *)TeraByte(2);
@@ -741,6 +830,7 @@ int main(int argc, char *argv[])
 #endif
 
     u64 TotalStorageSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    InputRecorder.TotalMemorySize = TotalStorageSize;
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
     GameMemory.PermanentStorage = VirtualAlloc(BaseAddress, TotalStorageSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 #else 
@@ -752,21 +842,9 @@ int main(int argc, char *argv[])
     
 
     game_state *State = (game_state*)GameMemory.PermanentStorage;
-    *State = {80, 64, 0};
+    *State = {};
     Assert(State);
 
-#if HITMAN_INTERNAL
-    char const *Path = "../data/read.txt";
-    debug_read_file_result ReadResult = DebugReadEntireFile(Path);
-    printf("Read file (length = %d)\n", ReadResult.ContentSize);
-    printf("%s", (char const *)ReadResult.Content);
-    DebugFreeFileMemory(ReadResult.Content);
-
-    char const *WritePath = "../data/write.txt";
-    char const *WriteContent = "Written to a file!\n\nWith multi line String\n";
-    printf("Writing %zu bytes to %s\n", strlen(WriteContent), WritePath);
-    DebugWriteEntireFile(WritePath, WriteContent, strlen(WriteContent));
-#endif
 
 #if HITMAN_INTERNAL
     sdl_debug_time_marker DebugTimeMarkers[GameUpdateHz / 2] = {};
@@ -787,13 +865,25 @@ int main(int argc, char *argv[])
         *NewKeyboardController = {};
         for(u64 ButtonIndex = 0; ButtonIndex < ArrayCount(NewKeyboardController->Buttons); ++ButtonIndex)
         {
-            NewKeyboardController->Buttons[ButtonIndex].IsDown =
-            OldKeyboardController->Buttons[ButtonIndex].IsDown;
+            NewKeyboardController->Buttons[ButtonIndex].IsDown = OldKeyboardController->Buttons[ButtonIndex].IsDown;
+            NewKeyboardController->Buttons[ButtonIndex].HalfTransitionCount = OldKeyboardController->Buttons[ButtonIndex].HalfTransitionCount;
         }
 
-        SDLHandleEvents(&e, &SdlSetup, &OffscreenBuffer, NewKeyboardController);
+        SDLHandleEvents(&e, &SdlSetup, &OffscreenBuffer, NewKeyboardController, &InputRecorder);
 
         HandleControllerEvents(OldInput, NewInput);
+
+#if HITMAN_INTERNAL
+        if (InputRecorder.ActionIndex == 1) 
+        {
+            DebugRecordInput(&InputRecorder, NewInput, &GameMemory);
+        } 
+        if (InputRecorder.ActionIndex == 2)
+        {
+            DebugEndRecordInput(&InputRecorder);   
+            DebugPlaybackInput(&InputRecorder, NewInput, &GameMemory);
+        }
+#endif
 
         if (GameCodeChanged(&GameCode) > GameCode.LastWriteTime) 
         {

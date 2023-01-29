@@ -22,8 +22,6 @@ typedef uint64_t u64;
 typedef float real32;
 typedef double real64;
 
-#define Pi32 3.14159265358979f
-
 #define global static
 #define internal static
 #define local_persist static
@@ -32,6 +30,8 @@ typedef double real64;
 #define MegaByte(Value) (KiloByte(Value) * 1024LL)
 #define GigaByte(Value) (MegaByte(Value) * 1024LL)
 #define TeraByte(Value) (GigaByte(Value) * 1024LL)
+
+#define Pi32 3.14159265358979f
 
 union v2 
 {

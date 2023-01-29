@@ -60,4 +60,14 @@ struct debug_read_file_result
     void *Content;
 };
 
+struct debug_input_recording
+{
+    u8 ActionIndex;
+
+    FILE *RecordHandle;
+    FILE *PlaybackHandle;
+
+    u64 TotalMemorySize;
+};
+
 #endif
