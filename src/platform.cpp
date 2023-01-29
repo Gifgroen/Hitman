@@ -238,6 +238,124 @@ internal real32 SDLProcessGameControllerAxisValue(s16 Value, s16 DeadZoneThresho
     return(Result);
 }
 
+
+#if HITMAN_INTERNAL // DEBUG I/O
+internal void DebugFreeFileMemory(void *Memory)
+{
+    if (Memory)
+    {
+        free(Memory);
+    }
+}
+
+internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
+{
+    debug_read_file_result Result = {};
+    struct stat Stat;
+    if (stat(Filename, &Stat) == 0) 
+    {
+        FILE *File = fopen(Filename, "r");
+        if (File != NULL) 
+        {
+            s64 Size = Stat.st_size;
+            Result.ContentSize = Size;
+            Result.Content = malloc(Size);
+            if(Result.Content)
+            {
+                fread(Result.Content, Size, 1, File);
+                fclose(File);
+            } 
+            else 
+            {
+                DebugFreeFileMemory(Result.Content);
+            }
+        }
+    }
+    return Result;
+}
+
+internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
+{
+    FILE * File = fopen (Filename, "w");
+    if (File == NULL) 
+    {
+        return false;
+    }
+
+    u64 Written = fwrite(Content, 1, Length, File);
+    fclose(File);
+    return Length == Written;
+}
+#endif
+
+#if HITMAN_INTERNAL // Looped Input recording
+internal void DebugBeginRecordInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
+{
+    // Setup Input recording, 
+    if (InputRecorder->RecordHandle == NULL)
+    {
+        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
+        
+        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
+        u32 BytesToWrite = (u32)InputRecorder->TotalMemorySize;
+        Assert(TotalMemorySize == BytesToWrite); // This can't be more then 4Gb, because then we cannot write it to a file at once.
+        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalMemorySize, InputRecorder->RecordHandle);
+        Assert(BytesToWrite == Written);
+    }
+}
+
+internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
+{
+    DebugBeginRecordInput(InputRecorder, GameMemory);
+
+    u64 InputSize = sizeof(*NewInput);
+    u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
+    Assert(InputSize == Written);
+}
+
+internal void DebugEndRecordInput(debug_input_recording *InputRecorder)
+{
+    if (InputRecorder->RecordHandle != NULL)
+    {
+        fclose(InputRecorder->RecordHandle);
+        InputRecorder->RecordHandle = NULL;
+    }
+}
+
+internal void DebugBeginPlaybackInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
+{
+    if (InputRecorder->PlaybackHandle == NULL)
+    {
+        InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
+        u32 BytesToRead = (u32)InputRecorder->TotalMemorySize;
+        Assert(InputRecorder->TotalMemorySize == BytesToRead); // This can't be more then 4Gb on Windows with Live loop, because we cannot write it to a file at once.
+        fread(GameMemory->PermanentStorage, BytesToRead, 1, InputRecorder->PlaybackHandle);
+    }
+}
+
+internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
+{
+    DebugBeginPlaybackInput(InputRecorder, GameMemory);
+
+    u64 InputSize = sizeof(game_input);
+    u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
+    
+    if (Read == 0)
+    {
+        InputRecorder->PlaybackHandle = NULL;
+    }
+}
+
+internal void DebugEndPlaybackInput(debug_input_recording *InputRecorder)
+{
+    if (InputRecorder->PlaybackHandle != NULL)
+    {
+        fclose(InputRecorder->PlaybackHandle);
+        InputRecorder->PlaybackHandle = NULL;
+    }
+}
+#endif
+
 #if HITMAN_INTERNAL
 internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController)
 {
@@ -259,17 +377,9 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, deb
             ++Recording->ActionIndex;
             if (Recording->ActionIndex > 2)
             {
-                if (Recording->RecordHandle) 
-                {
-                    fclose(Recording->RecordHandle);
-                    Recording->RecordHandle = NULL;
-                }
-                if (Recording->PlaybackHandle) 
-                {
-                    fclose(Recording->PlaybackHandle);
-                    Recording->PlaybackHandle = NULL;
-                }
-
+                DebugEndRecordInput(Recording);
+                DebugEndPlaybackInput(Recording);
+            
                 Recording->ActionIndex = 0;
                 // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
                 for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
@@ -645,97 +755,6 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
-#if HITMAN_INTERNAL // DEBUG I/O
-internal void DebugFreeFileMemory(void *Memory)
-{
-    if (Memory)
-    {
-        free(Memory);
-    }
-}
-
-internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
-{
-    debug_read_file_result Result = {};
-    struct stat Stat;
-    if (stat(Filename, &Stat) == 0) 
-    {
-        FILE *File = fopen(Filename, "r");
-        if (File != NULL) 
-        {
-            s64 Size = Stat.st_size;
-            Result.ContentSize = Size;
-            Result.Content = malloc(Size);
-            if(Result.Content)
-            {
-                fread(Result.Content, Size, 1, File);
-                fclose(File);
-            } 
-            else 
-            {
-                DebugFreeFileMemory(Result.Content);
-            }
-        }
-    }
-    return Result;
-}
-
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
-{
-    FILE * File = fopen (Filename, "w");
-    if (File == NULL) 
-    {
-        return false;
-    }
-
-    u64 Written = fwrite(Content, 1, Length, File);
-    fclose(File);
-    return Length == Written;
-}
-#endif
-
-#if HITMAN_INTERNAL
-internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
-{
-    // Setup Input recording, 
-    if (InputRecorder->RecordHandle == NULL)
-    {
-        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
-        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
-
-        u32 BytesToWrite = (u32)InputRecorder->TotalMemorySize;
-        Assert(TotalMemorySize == BytesToWrite); // This can't be more then 4Gb, because then we cannot write it to a file at once.
-        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalMemorySize, InputRecorder->RecordHandle);
-        Assert(BytesToWrite == Written);
-    }
-    u64 InputSize = sizeof(*NewInput);
-    u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
-    Assert(InputSize == Written);
-}
-
-internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
-{
-    if (InputRecorder->RecordHandle != NULL)
-    {
-        fclose(InputRecorder->RecordHandle);
-        InputRecorder->RecordHandle = NULL;
-    }
-    if (InputRecorder->PlaybackHandle == NULL)
-    {
-        InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
-        u32 BytesToRead = (u32)InputRecorder->TotalMemorySize;
-        Assert(InputRecorder->TotalMemorySize == BytesToRead); // This can't be more then 4Gb on Windows with Live loop, because we cannot write it to a file at once.
-        fread(GameMemory->PermanentStorage, BytesToRead, 1, InputRecorder->PlaybackHandle);
-    }
-    u64 InputSize = sizeof(game_input);
-    u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
-    if (Read == 0)
-    {
-        InputRecorder->PlaybackHandle = NULL;
-    }
-}
-#endif
-
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -861,6 +880,7 @@ int main(int argc, char *argv[])
         } 
         if (InputRecorder.ActionIndex == 2)
         {
+            DebugEndRecordInput(&InputRecorder);   
             DebugPlaybackInput(&InputRecorder, NewInput, &GameMemory);
         }
 #endif
