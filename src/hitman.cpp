@@ -60,7 +60,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
     {
         game_controller_input *Controller = &(Input->Controllers[i]);
-        
+
         if (Controller->MoveLeft.IsDown) 
         {
             GameState->PlayerX -= 1 * Speed;

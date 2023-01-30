@@ -16,6 +16,8 @@
 #include "hitman.h"
 #include "platform.h"
 
+#include <pthread.h>
+
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 global sdl_audio_ring_buffer AudioRingBuffer;
 
@@ -755,6 +757,12 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
+internal void *PrintMessageFunction(void* Data) 
+{
+    char *Message = (char*)Data;
+    printf("Message = %s\n", Message);
+}
+
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -872,6 +880,25 @@ int main(int argc, char *argv[])
         SDLHandleEvents(&e, &SdlSetup, &OffscreenBuffer, NewKeyboardController, &InputRecorder);
 
         HandleControllerEvents(OldInput, NewInput);
+
+        pthread_t threads[8];
+        int is[8];
+        for (int ThreadIndex = 0; ThreadIndex < 8; ++ThreadIndex)
+        {
+            char message[12];
+            sprintf(message, "A message %d\n", ThreadIndex);
+            is[ThreadIndex] = pthread_create(&threads[ThreadIndex], NULL, PrintMessageFunction, (void *)message);
+        }
+
+        for (int ThreadIndex = 0; ThreadIndex < ArrayCount(threads); ++ThreadIndex) 
+        {
+            pthread_join(threads[ThreadIndex], NULL);
+        }
+
+        for (int ThreadIndex = 0; ThreadIndex < ArrayCount(is); ++ThreadIndex) 
+        {
+            printf("Thread %d returns: %d\n", ThreadIndex, is[ThreadIndex]);
+        }
 
 #if HITMAN_INTERNAL
         if (InputRecorder.ActionIndex == 1) 
@@ -1020,7 +1047,7 @@ int main(int argc, char *argv[])
         real64 FPS = (real64)PerfCountFrequency / (real64)CounterElapsed;
         real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
 
-        printf("%.02fms/f, %.02f/s, %.02fmc/f\n", MSPerFrame, FPS, MCPF);
+        // printf("%.02fms/f, %.02f/s, %.02fmc/f\n", MSPerFrame, FPS, MCPF);
 
         LastCycleCount = EndCycleCount;
         LastCounter = EndCounter;
