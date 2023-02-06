@@ -35,6 +35,13 @@ struct sdl_audio_ring_buffer
     void *Data;
 };
 
+struct sdl_audio_buffer_index 
+{
+    int ByteToLock;
+    int TargetCursor;
+    int BytesToWrite;
+};
+
 struct sdl_debug_time_marker 
 {
     int PlayCursor;
