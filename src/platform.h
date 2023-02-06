@@ -54,20 +54,4 @@ struct game_code
     GameGetSoundSamples_t GameGetSoundSamples;
 };
 
-struct debug_read_file_result
-{
-    u32 ContentSize;
-    void *Content;
-};
-
-struct debug_input_recording
-{
-    u8 ActionIndex;
-
-    FILE *RecordHandle;
-    FILE *PlaybackHandle;
-
-    u64 TotalMemorySize;
-};
-
 #endif

@@ -18,11 +18,21 @@
 
 #include <pthread.h>
 
+#if HITMAN_INTERNAL
+#include "platform/debug_io.h"
+#include "platform/debug_io.cpp"
+#endif
+
+// TODO: this should be wrapped in #if HITMAN_INTERNAL, but structs from .h currently used in None Internal handlers.
+#include "platform/debug_input_recording.h"
+#include "platform/debug_input_recording.cpp"
+
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 global sdl_audio_ring_buffer AudioRingBuffer;
 
 global bool Running = true;
 
+// BackBuffer alloc
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
 internal void Alloc(game_offscreen_buffer *Buffer) 
 {
@@ -54,6 +64,7 @@ internal void Dealloc(game_offscreen_buffer *Buffer)
 }
 #endif
 
+// Window management
 internal void UpdateOffscreenBufferDimensions(sdl_setup *Setup, game_offscreen_buffer *Buffer, v2 NewDimensions)
 {
     if (Setup->WindowTexture) 
@@ -84,60 +95,6 @@ internal v2 GetWindowDimensions(SDL_Window *Window)
     return Result;
 }
 
-internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, u32 Color)
-{
-    int Pitch = Buffer->Pitch;
-    u8 *Pixel = ((u8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
-    for(int Y = Top; Y < Bottom; ++Y)
-    {
-        *(u32 *)Pixel = Color;
-        Pixel += Pitch;
-    }
-}
-
-inline void SDLDrawSoundBufferMarker(
-    game_offscreen_buffer *Buffer,
-    sdl_sound_output *SoundOutput,
-    real32 C, 
-    int PadX, 
-    int Top, 
-    int Bottom,
-    int Value, 
-    u32 Color
-) {
-    Assert(Value < SoundOutput->SecondaryBufferSize);
-    real32 XReal32 = (C * (real32)Value);
-    int X = PadX + (int)XReal32;
-    SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
-}
-
-#if HITMAN_INTERNAL
-internal void SDLDebugSyncDisplay(
-    game_offscreen_buffer *Buffer, 
-    int DebugTimeMarkerCount, 
-    sdl_debug_time_marker *DebugTimeMarkers, 
-    sdl_sound_output *SoundOutput, 
-    real64 TargetSecondsPerFrame
-) {
-    int PadX = 16;
-    int PadY = 16;
-
-    v2 Dimensions = Buffer->Dimensions;
-    int Width = Dimensions.width;
-    real32 PixelsPerByte = (real32)(Width - (2 * PadX)) / (real32)SoundOutput->SecondaryBufferSize;
-
-    int Top = PadY;
-    int Bottom = Dimensions.height - PadY;
-
-    for (int MarkerIndex = 0; MarkerIndex < DebugTimeMarkerCount; ++MarkerIndex)
-    {
-        sdl_debug_time_marker *Marker = &DebugTimeMarkers[MarkerIndex];
-        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->PlayCursor, 0xFFFFFFFF);
-        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->WriteCursor, 0xFFFF0000);
-    }
-}
-#endif
-
 internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Buffer, SDL_Renderer *Renderer) 
 {
     SDL_UpdateTexture(WindowTexture, 0, Buffer->Pixels, Buffer->Pitch);
@@ -145,6 +102,7 @@ internal void UpdateWindow(SDL_Texture *WindowTexture, game_offscreen_buffer *Bu
     SDL_RenderPresent(Renderer);
 }
 
+// Enforce Framerate
 internal int GetWindowRefreshRate(SDL_Window *Window)
 {
     SDL_DisplayMode Mode;
@@ -162,6 +120,33 @@ internal int GetWindowRefreshRate(SDL_Window *Window)
     return Mode.refresh_rate;
 }
 
+internal real32 GetSecondsElapsed(u64 OldCounter, u64 CurrentCounter)
+{
+    return ((real32)(CurrentCounter - OldCounter) / (real32)(SDL_GetPerformanceFrequency()));
+}
+
+internal void TryWaitForNextFrame(u64 LastCounter, real64 TargetSecondsPerFrame) 
+{
+    if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
+    {
+        s32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 1;
+        if (TimeToSleep > 0)
+        {
+            SDL_Delay(TimeToSleep);
+        }
+
+        if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) >= TargetSecondsPerFrame) 
+        {
+            printf("Frame time %02f was more then our target\n", GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()));
+        }
+        while (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
+        {
+            // Waiting...
+        }
+    }
+}
+
+// Input
 internal void OpenInputControllers() 
 {
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
@@ -180,35 +165,10 @@ internal void OpenInputControllers()
     }
 }
 
-internal real32 GetSecondsElapsed(u64 OldCounter, u64 CurrentCounter)
-{
-    return ((real32)(CurrentCounter - OldCounter) / (real32)(SDL_GetPerformanceFrequency()));
-}
-
 internal game_controller_input *GetControllerForIndex(game_input *Input, int Index) 
 {
     game_controller_input *Result = &(Input->Controllers[Index]);
     return Result;
-}
-
-internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, game_offscreen_buffer *Buffer) 
-{
-    switch(e.event)
-    {
-        case SDL_WINDOWEVENT_SIZE_CHANGED: 
-        {
-            int NewWidth = e.data1;
-            int NewHeight = e.data2;
-            v2 NewDimensions = V2(NewWidth, NewHeight);
-            UpdateOffscreenBufferDimensions(Setup, Buffer, NewDimensions);
-        } break;
-
-        case SDL_WINDOWEVENT_EXPOSED: 
-        {
-            v2 KnownDimensions = GetWindowDimensions(Setup->Window);
-            UpdateOffscreenBufferDimensions(Setup, Buffer, KnownDimensions);
-        } break;
-    }
 }
 
 internal void ProcessKeyInput(game_button_state *NewState, bool IsDown)
@@ -240,125 +200,8 @@ internal real32 SDLProcessGameControllerAxisValue(s16 Value, s16 DeadZoneThresho
     return(Result);
 }
 
-
-#if HITMAN_INTERNAL // DEBUG I/O
-internal void DebugFreeFileMemory(void *Memory)
-{
-    if (Memory)
-    {
-        free(Memory);
-    }
-}
-
-internal debug_read_file_result DebugReadEntireFile(char const *Filename) 
-{
-    debug_read_file_result Result = {};
-    struct stat Stat;
-    if (stat(Filename, &Stat) == 0) 
-    {
-        FILE *File = fopen(Filename, "r");
-        if (File != NULL) 
-        {
-            s64 Size = Stat.st_size;
-            Result.ContentSize = Size;
-            Result.Content = malloc(Size);
-            if(Result.Content)
-            {
-                fread(Result.Content, Size, 1, File);
-                fclose(File);
-            } 
-            else 
-            {
-                DebugFreeFileMemory(Result.Content);
-            }
-        }
-    }
-    return Result;
-}
-
-internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
-{
-    FILE * File = fopen (Filename, "w");
-    if (File == NULL) 
-    {
-        return false;
-    }
-
-    u64 Written = fwrite(Content, 1, Length, File);
-    fclose(File);
-    return Length == Written;
-}
-#endif
-
-#if HITMAN_INTERNAL // Looped Input recording
-internal void DebugBeginRecordInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
-{
-    // Setup Input recording, 
-    if (InputRecorder->RecordHandle == NULL)
-    {
-        InputRecorder->RecordHandle = fopen("../data/input.hmi", "w");
-        
-        u64 TotalMemorySize = InputRecorder->TotalMemorySize;
-        u32 BytesToWrite = (u32)InputRecorder->TotalMemorySize;
-        Assert(TotalMemorySize == BytesToWrite); // This can't be more then 4Gb, because then we cannot write it to a file at once.
-        u64 Written = fwrite(GameMemory->PermanentStorage, 1, TotalMemorySize, InputRecorder->RecordHandle);
-        Assert(BytesToWrite == Written);
-    }
-}
-
-internal void DebugRecordInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
-{
-    DebugBeginRecordInput(InputRecorder, GameMemory);
-
-    u64 InputSize = sizeof(*NewInput);
-    u64 Written = fwrite(NewInput, 1, InputSize, InputRecorder->RecordHandle);
-    Assert(InputSize == Written);
-}
-
-internal void DebugEndRecordInput(debug_input_recording *InputRecorder)
-{
-    if (InputRecorder->RecordHandle != NULL)
-    {
-        fclose(InputRecorder->RecordHandle);
-        InputRecorder->RecordHandle = NULL;
-    }
-}
-
-internal void DebugBeginPlaybackInput(debug_input_recording *InputRecorder, game_memory *GameMemory) 
-{
-    if (InputRecorder->PlaybackHandle == NULL)
-    {
-        InputRecorder->PlaybackHandle = fopen("../data/input.hmi", "r");
-        u32 BytesToRead = (u32)InputRecorder->TotalMemorySize;
-        Assert(InputRecorder->TotalMemorySize == BytesToRead); // This can't be more then 4Gb on Windows with Live loop, because we cannot write it to a file at once.
-        fread(GameMemory->PermanentStorage, BytesToRead, 1, InputRecorder->PlaybackHandle);
-    }
-}
-
-internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory)
-{
-    DebugBeginPlaybackInput(InputRecorder, GameMemory);
-
-    u64 InputSize = sizeof(game_input);
-    u64 Read = fread(NewInput, 1, InputSize, InputRecorder->PlaybackHandle);
-    
-    if (Read == 0)
-    {
-        InputRecorder->PlaybackHandle = NULL;
-    }
-}
-
-internal void DebugEndPlaybackInput(debug_input_recording *InputRecorder)
-{
-    if (InputRecorder->PlaybackHandle != NULL)
-    {
-        fclose(InputRecorder->PlaybackHandle);
-        InputRecorder->PlaybackHandle = NULL;
-    }
-}
-#endif
-
-#if HITMAN_INTERNAL
+// Platform Event handling
+#if HITMAN_INTERNAL // Debug Input handling
 internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController)
 {
     SDL_Keycode KeyCode = Event.keysym.sym;
@@ -395,7 +238,27 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, deb
     }
 }
 #endif
-    
+
+internal void HandleWindowEvent(SDL_WindowEvent e, sdl_setup *Setup, game_offscreen_buffer *Buffer) 
+{
+    switch(e.event)
+    {
+        case SDL_WINDOWEVENT_SIZE_CHANGED: 
+        {
+            int NewWidth = e.data1;
+            int NewHeight = e.data2;
+            v2 NewDimensions = V2(NewWidth, NewHeight);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, NewDimensions);
+        } break;
+
+        case SDL_WINDOWEVENT_EXPOSED: 
+        {
+            v2 KnownDimensions = GetWindowDimensions(Setup->Window);
+            UpdateOffscreenBufferDimensions(Setup, Buffer, KnownDimensions);
+        } break;
+    }
+}    
+
 internal void HandleKeyEvent(SDL_KeyboardEvent key, game_controller_input *KeyboardController)
 {
     SDL_Keycode KeyCode = key.keysym.sym;
@@ -561,27 +424,7 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-internal void TryWaitForNextFrame(u64 LastCounter, real64 TargetSecondsPerFrame) 
-{
-    if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
-    {
-        s32 TimeToSleep = ((TargetSecondsPerFrame - GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter())) * 1000) - 1;
-        if (TimeToSleep > 0)
-        {
-            SDL_Delay(TimeToSleep);
-        }
-
-        if (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) >= TargetSecondsPerFrame) 
-        {
-            printf("Frame time %02f was more then our target\n", GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()));
-        }
-        while (GetSecondsElapsed(LastCounter, SDL_GetPerformanceCounter()) < TargetSecondsPerFrame)
-        {
-            // Waiting...
-        }
-    }
-}
-
+// GameCode
 internal s64 GameCodeChanged(game_code *GameCode) 
 {
     char const *Filename = GameCode->LibPath;
@@ -625,6 +468,7 @@ internal int LoadGameCode(game_code *GameCode)
     return 0;
 }
 
+// SDL
 internal void SdlSetupWindow(sdl_setup *Setup, v2 Dimensions) 
 {
     u32 WindowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
@@ -635,6 +479,7 @@ internal void SdlSetupWindow(sdl_setup *Setup, v2 Dimensions)
     Assert(Setup->Renderer);
 }
 
+// Close
 internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *GameMemory) 
 {
     if (GameCode->LibHandle) 
@@ -681,6 +526,7 @@ internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *Game
     SDL_Quit();
 }
 
+// SDL Audio
 internal void SDLAudioCallback(void *UserData, u8 *AudioData, int Length)
 {
     sdl_audio_ring_buffer *RingBuffer = (sdl_audio_ring_buffer *)UserData;
@@ -757,12 +603,70 @@ internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int
     }
 }
 
+#if HITMAN_INTERNAL // Draw Audio Debug
+
+internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, u32 Color)
+{
+    int Pitch = Buffer->Pitch;
+    u8 *Pixel = ((u8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
+    for(int Y = Top; Y < Bottom; ++Y)
+    {
+        *(u32 *)Pixel = Color;
+        Pixel += Pitch;
+    }
+}
+
+inline void SDLDrawSoundBufferMarker(
+    game_offscreen_buffer *Buffer,
+    sdl_sound_output *SoundOutput,
+    real32 C, 
+    int PadX, 
+    int Top, 
+    int Bottom,
+    int Value, 
+    u32 Color
+) {
+    Assert(Value < SoundOutput->SecondaryBufferSize);
+    real32 XReal32 = (C * (real32)Value);
+    int X = PadX + (int)XReal32;
+    SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
+}
+
+internal void SDLDebugSyncDisplay(
+    game_offscreen_buffer *Buffer, 
+    int DebugTimeMarkerCount, 
+    sdl_debug_time_marker *DebugTimeMarkers, 
+    sdl_sound_output *SoundOutput, 
+    real64 TargetSecondsPerFrame
+) {
+    int PadX = 16;
+    int PadY = 16;
+
+    v2 Dimensions = Buffer->Dimensions;
+    int Width = Dimensions.width;
+    real32 PixelsPerByte = (real32)(Width - (2 * PadX)) / (real32)SoundOutput->SecondaryBufferSize;
+
+    int Top = PadY;
+    int Bottom = Dimensions.height - PadY;
+
+    for (int MarkerIndex = 0; MarkerIndex < DebugTimeMarkerCount; ++MarkerIndex)
+    {
+        sdl_debug_time_marker *Marker = &DebugTimeMarkers[MarkerIndex];
+        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->PlayCursor, 0xFFFFFFFF);
+        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->WriteCursor, 0xFFFF0000);
+    }
+}
+#endif
+
+// Experimental Threading
 internal void *PrintMessageFunction(void* Data) 
 {
     char *Message = (char*)Data;
     printf("Message = %s\n", Message);
+    return (void *)0;
 }
 
+// Main
 int main(int argc, char *argv[]) 
 {
 #if HITMAN_DEBUG
@@ -881,12 +785,13 @@ int main(int argc, char *argv[])
 
         HandleControllerEvents(OldInput, NewInput);
 
+#if 0
         pthread_t threads[8];
         int is[8];
         for (int ThreadIndex = 0; ThreadIndex < 8; ++ThreadIndex)
         {
             char message[12];
-            sprintf(message, "A message %d\n", ThreadIndex);
+            snprintf(message, 12, "A message %d\n", ThreadIndex);
             is[ThreadIndex] = pthread_create(&threads[ThreadIndex], NULL, PrintMessageFunction, (void *)message);
         }
 
@@ -899,6 +804,7 @@ int main(int argc, char *argv[])
         {
             printf("Thread %d returns: %d\n", ThreadIndex, is[ThreadIndex]);
         }
+#endif
 
 #if HITMAN_INTERNAL
         if (InputRecorder.ActionIndex == 1) 
@@ -1047,7 +953,7 @@ int main(int argc, char *argv[])
         real64 FPS = (real64)PerfCountFrequency / (real64)CounterElapsed;
         real64 MCPF = ((real64)CyclesElapsed / (1000.0f * 1000.0f));
 
-        // printf("%.02fms/f, %.02f/s, %.02fmc/f\n", MSPerFrame, FPS, MCPF);
+        printf("%.02fms/f, %.02f/s, %.02fmc/f\n", MSPerFrame, FPS, MCPF);
 
         LastCycleCount = EndCycleCount;
         LastCounter = EndCounter;
