@@ -35,39 +35,17 @@ struct sdl_audio_ring_buffer
     void *Data;
 };
 
+struct sdl_audio_buffer_index 
+{
+    int ByteToLock;
+    int TargetCursor;
+    int BytesToWrite;
+};
+
 struct sdl_debug_time_marker 
 {
     int PlayCursor;
     int WriteCursor;
-};
-
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*, int);
-typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
-
-struct game_code
-{
-    char const *LibPath;
-    void* LibHandle;
-    s64 LastWriteTime;
-
-    GameUpdateAndRender_t GameUpdateAndRender;
-    GameGetSoundSamples_t GameGetSoundSamples;
-};
-
-struct debug_read_file_result
-{
-    u32 ContentSize;
-    void *Content;
-};
-
-struct debug_input_recording
-{
-    u8 ActionIndex;
-
-    FILE *RecordHandle;
-    FILE *PlaybackHandle;
-
-    u64 TotalMemorySize;
 };
 
 #endif
