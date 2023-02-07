@@ -48,17 +48,4 @@ struct sdl_debug_time_marker
     int WriteCursor;
 };
 
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*, int);
-typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
-
-struct game_code
-{
-    char const *LibPath;
-    void* LibHandle;
-    s64 LastWriteTime;
-
-    GameUpdateAndRender_t GameUpdateAndRender;
-    GameGetSoundSamples_t GameGetSoundSamples;
-};
-
 #endif

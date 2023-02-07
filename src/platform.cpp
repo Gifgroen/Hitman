@@ -1,5 +1,3 @@
-#include <dlfcn.h>
-
 #include <stdio.h>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
@@ -16,16 +14,20 @@
 #include "hitman.h"
 #include "platform.h"
 
-#include <pthread.h>
-
 #if HITMAN_INTERNAL
 #include "platform/debug_io.h"
 #include "platform/debug_io.cpp"
+
+#include "platform/debug_sync_display.h"
+#include "platform/debug_sync_display.cpp"
 #endif
 
 // TODO: this should be wrapped in #if HITMAN_INTERNAL, but structs from .h currently used in None Internal handlers.
 #include "platform/debug_input_recording.h"
 #include "platform/debug_input_recording.cpp"
+
+#include "game_code.h"
+#include "game_code.cpp"
 
 global SDL_GameController *ControllerHandles[MAX_CONTROLLER_COUNT];
 global sdl_audio_ring_buffer AudioRingBuffer;
@@ -434,50 +436,6 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
     }
 }
 
-// GameCode
-internal s64 GameCodeChanged(game_code *GameCode) 
-{
-    char const *Filename = GameCode->LibPath;
-    struct stat Result;
-    if (stat(Filename, &Result) == 0) 
-    {
-        return Result.st_mtime;
-    }
-    return 0;
-}
-
-internal int LoadGameCode(game_code *GameCode)
-{
-    if (GameCode->LibHandle) 
-    {
-        dlclose(GameCode->LibHandle);
-        GameCode->LibHandle = NULL;
-    }
-
-    GameCode->LibHandle = dlopen(GameCode->LibPath, RTLD_LAZY);
-    if (!GameCode->LibHandle) 
-    {
-        printf("Cannot open library: %s\n", dlerror());
-        return -1;
-    }
-
-    dlerror();  // reset dl errors
-    GameCode->GameUpdateAndRender = (GameUpdateAndRender_t)dlsym(GameCode->LibHandle, "GameUpdateAndRender");
-    GameCode->GameGetSoundSamples = (GameGetSoundSamples_t)dlsym(GameCode->LibHandle, "GameGetSoundSamples");
-
-    char const *DlSymError = dlerror();
-    if (DlSymError) 
-    {
-        printf("Cannot load symbol(s) 'GameUpdateAndRender_t': %s \n", DlSymError);
-        dlclose(GameCode->LibHandle);
-        return 1;
-    }
-
-    GameCode->LastWriteTime = GameCodeChanged(GameCode);
-
-    return 0;
-}
-
 // SDL Audio
 internal void SDLAudioCallback(void *UserData, u8 *AudioData, int Length)
 {
@@ -520,149 +478,6 @@ internal void InitAudio(s32 SamplesPerSecond, s32 BufferSize)
         printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
         SDL_CloseAudio();
     }
-}
-
-internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int BytesToWrite, game_sound_output_buffer *SoundBuffer)
-{
-    s16 *Samples = SoundBuffer->Samples;
-
-    void *Region1 = (u8 *)AudioRingBuffer.Data + ByteToLock;
-    int Region1Size = BytesToWrite;
-    if (Region1Size + ByteToLock > SoundOutput->SecondaryBufferSize)
-    {
-        Region1Size = SoundOutput->SecondaryBufferSize - ByteToLock;
-    }
-    void *Region2 = AudioRingBuffer.Data;
-    int Region2Size = BytesToWrite - Region1Size;
-    int Region1SampleCount = Region1Size / SoundOutput->BytesPerSample;
-    s16 *SampleOut = (s16 *)Region1;
-    for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
-    {
-        *SampleOut++ = *Samples++;
-        *SampleOut++ = *Samples++;
-
-        ++SoundOutput->RunningSampleIndex;
-    }
-
-    int Region2SampleCount = Region2Size / SoundOutput->BytesPerSample;
-    SampleOut = (s16 *)Region2;
-    for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
-    {
-        *SampleOut++ = *Samples++;
-        *SampleOut++ = *Samples++;
-
-        ++SoundOutput->RunningSampleIndex;
-    }
-}
-
-#if HITMAN_INTERNAL // Draw Audio Debug
-
-internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, u32 Color)
-{
-    int Pitch = Buffer->Pitch;
-    u8 *Pixel = ((u8 *)Buffer->Pixels + Value * Buffer->BytesPerPixel + Top * Pitch);
-    for(int Y = Top; Y < Bottom; ++Y)
-    {
-        *(u32 *)Pixel = Color;
-        Pixel += Pitch;
-    }
-}
-
-inline void SDLDrawSoundBufferMarker(
-    game_offscreen_buffer *Buffer,
-    sdl_sound_output *SoundOutput,
-    real32 C, 
-    int PadX, 
-    int Top, 
-    int Bottom,
-    int Value, 
-    u32 Color
-) {
-    Assert(Value < SoundOutput->SecondaryBufferSize);
-    real32 XReal32 = (C * (real32)Value);
-    int X = PadX + (int)XReal32;
-    SDLDebugDrawVertical(Buffer, X, Top, Bottom, Color);
-}
-
-internal void SDLDebugSyncDisplay(
-    game_offscreen_buffer *Buffer, 
-    int DebugTimeMarkerCount, 
-    sdl_debug_time_marker *DebugTimeMarkers, 
-    sdl_sound_output *SoundOutput, 
-    real64 TargetSecondsPerFrame
-) {
-    int PadX = 16;
-    int PadY = 16;
-
-    v2 Dimensions = Buffer->Dimensions;
-    int Width = Dimensions.width;
-    real32 PixelsPerByte = (real32)(Width - (2 * PadX)) / (real32)SoundOutput->SecondaryBufferSize;
-
-    int Top = PadY;
-    int Bottom = Dimensions.height - PadY;
-
-    for (int MarkerIndex = 0; MarkerIndex < DebugTimeMarkerCount; ++MarkerIndex)
-    {
-        sdl_debug_time_marker *Marker = &DebugTimeMarkers[MarkerIndex];
-        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->PlayCursor, 0xFFFFFFFF);
-        SDLDrawSoundBufferMarker(Buffer, SoundOutput, PixelsPerByte, PadX, Top, Bottom, Marker->WriteCursor, 0xFFFF0000);
-    }
-}
-#endif
-
-// Experimental Threading
-internal void *PrintMessageFunction(void* Data) 
-{
-    char *Message = (char*)Data;
-    printf("Message = %s\n", Message);
-    return (void *)0;
-}
-
-// Close
-internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *GameMemory) 
-{
-    if (GameCode->LibHandle) 
-    {
-        dlclose(GameCode->LibHandle);
-        GameCode->LibHandle = NULL;
-    }
-
-    if (Setup->WindowTexture) 
-    {
-        SDL_DestroyTexture(Setup->WindowTexture);
-        Setup->WindowTexture = NULL;
-    }
-    if (Setup->Renderer) 
-    {
-        SDL_DestroyRenderer(Setup->Renderer);
-        Setup->Renderer = NULL;
-    }
-    if (Setup->Window) 
-    {
-        SDL_DestroyWindow(Setup->Window);
-	    Setup->Window = NULL;
-    }
-    for (u64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
-    {
-        if (ControllerHandles[i]) 
-        {
-            SDL_GameControllerClose(ControllerHandles[i]);
-            ControllerHandles[i] = NULL;
-        }
-    }
-
-    SDL_CloseAudio();
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    bool Result = VirtualFree(GameMemory->PermanentStorage, 0, MEM_RELEASE);
-    Assert(Result);
-#else
-    u64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
-    int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
-    Assert(Result == 0);
-#endif
-
-    SDL_Quit();
 }
 
 internal sdl_audio_buffer_index  PositionAudioBuffer(sdl_sound_output *SoundOutput, int GameUpdateHz)
@@ -710,6 +525,86 @@ internal sdl_audio_buffer_index  PositionAudioBuffer(sdl_sound_output *SoundOutp
     Result.TargetCursor = TargetCursor;
     Result.BytesToWrite = BytesToWrite;
     return Result;
+}
+
+internal void FillSoundBuffer(sdl_sound_output *SoundOutput, int ByteToLock, int BytesToWrite, game_sound_output_buffer *SoundBuffer)
+{
+    s16 *Samples = SoundBuffer->Samples;
+
+    void *Region1 = (u8 *)AudioRingBuffer.Data + ByteToLock;
+    int Region1Size = BytesToWrite;
+    if (Region1Size + ByteToLock > SoundOutput->SecondaryBufferSize)
+    {
+        Region1Size = SoundOutput->SecondaryBufferSize - ByteToLock;
+    }
+    void *Region2 = AudioRingBuffer.Data;
+    int Region2Size = BytesToWrite - Region1Size;
+    int Region1SampleCount = Region1Size / SoundOutput->BytesPerSample;
+    s16 *SampleOut = (s16 *)Region1;
+    for(int SampleIndex = 0; SampleIndex < Region1SampleCount; ++SampleIndex)
+    {
+        *SampleOut++ = *Samples++;
+        *SampleOut++ = *Samples++;
+
+        ++SoundOutput->RunningSampleIndex;
+    }
+
+    int Region2SampleCount = Region2Size / SoundOutput->BytesPerSample;
+    SampleOut = (s16 *)Region2;
+    for(int SampleIndex = 0; SampleIndex < Region2SampleCount; ++SampleIndex)
+    {
+        *SampleOut++ = *Samples++;
+        *SampleOut++ = *Samples++;
+
+        ++SoundOutput->RunningSampleIndex;
+    }
+}
+
+// Close
+internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *GameMemory) 
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+
+    if (Setup->WindowTexture) 
+    {
+        SDL_DestroyTexture(Setup->WindowTexture);
+        Setup->WindowTexture = NULL;
+    }
+    if (Setup->Renderer) 
+    {
+        SDL_DestroyRenderer(Setup->Renderer);
+        Setup->Renderer = NULL;
+    }
+    if (Setup->Window) 
+    {
+        SDL_DestroyWindow(Setup->Window);
+	    Setup->Window = NULL;
+    }
+    for (u64 i = 0; i < ArrayCount(ControllerHandles); ++i) 
+    {
+        if (ControllerHandles[i]) 
+        {
+            SDL_GameControllerClose(ControllerHandles[i]);
+            ControllerHandles[i] = NULL;
+        }
+    }
+
+    SDL_CloseAudio();
+
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+    bool Result = VirtualFree(GameMemory->PermanentStorage, 0, MEM_RELEASE);
+    Assert(Result);
+#else
+    u64 TotalStorageSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
+    int Result = munmap(GameMemory->PermanentStorage, TotalStorageSize);
+    Assert(Result == 0);
+#endif
+
+    SDL_Quit();
 }
 
 // Main
@@ -829,27 +724,6 @@ int main(int argc, char *argv[])
 
         HandleControllerEvents(OldInput, NewInput);
 
-#if 0
-        pthread_t threads[8];
-        int is[8];
-        for (int ThreadIndex = 0; ThreadIndex < 8; ++ThreadIndex)
-        {
-            char message[12];
-            snprintf(message, 12, "A message %d\n", ThreadIndex);
-            is[ThreadIndex] = pthread_create(&threads[ThreadIndex], NULL, PrintMessageFunction, (void *)message);
-        }
-
-        for (int ThreadIndex = 0; ThreadIndex < ArrayCount(threads); ++ThreadIndex) 
-        {
-            pthread_join(threads[ThreadIndex], NULL);
-        }
-
-        for (int ThreadIndex = 0; ThreadIndex < ArrayCount(is); ++ThreadIndex) 
-        {
-            printf("Thread %d returns: %d\n", ThreadIndex, is[ThreadIndex]);
-        }
-#endif
-
 #if HITMAN_INTERNAL
         if (InputRecorder.ActionIndex == 1) 
         {
@@ -893,8 +767,7 @@ int main(int argc, char *argv[])
 
         FillSoundBuffer(&SoundOutput, AudioBufferIndex.ByteToLock, AudioBufferIndex.BytesToWrite, &SoundBuffer); 
 
-#if 1 // SOUND SYNC DEBUG
-
+#if HITMAN_DEBUG // SOUND SYNC DEBUG
         int UnwrappedWriteCursor = AudioRingBuffer.WriteCursor;
         if (UnwrappedWriteCursor < AudioRingBuffer.PlayCursor)
         {
