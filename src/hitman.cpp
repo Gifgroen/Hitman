@@ -57,26 +57,31 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
 {
     int Speed = 5;
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
-    for (int i = 0; i < MAX_CONTROLLER_COUNT; ++i) 
+    for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex) 
     {
-        game_controller_input *Controller = &(Input->Controllers[i]);
+        game_controller_input *Controller = &(Input->Controllers[ControllerIndex]);
 
+        int HorizontalSpeed = 0;
         if (Controller->MoveLeft.IsDown) 
         {
-            GameState->PlayerX -= 1 * Speed;
+            HorizontalSpeed = -1 * Speed;
         }
         if (Controller->MoveRight.IsDown)
         {
-            GameState->PlayerX += 1 * Speed;
+            HorizontalSpeed = 1 * Speed;
         }
+        int VerticalSpeed = 0;
         if (Controller->MoveUp.IsDown) 
         {
-            GameState->PlayerY -= 1 * Speed;
+            VerticalSpeed = -1 * Speed;
         }
         if (Controller->MoveDown.IsDown) 
         {
-            GameState->PlayerY += 1 * Speed;
+            VerticalSpeed = 1 * Speed;
         }
+        v2 NewPlayerP = V2(GameState->PlayerP.x + HorizontalSpeed, GameState->PlayerP.y + VerticalSpeed);
+        GameState->PlayerP = NewPlayerP;
+
         real32 AverageY = Controller->StickAverageY;
         if (AverageY != 0)
         {
@@ -119,7 +124,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         }
     }
 
-    v2 PlayerP = V2(GameState->PlayerX, GameState->PlayerY);
+    v2 PlayerP = GameState->PlayerP;
     v2 PlayerDest = V2(PlayerP.x + 32, PlayerP.y + 50);
     DrawRectangle(Buffer, PlayerP, PlayerDest, 0xFF0000FF);
 }
