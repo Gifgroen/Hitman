@@ -53,33 +53,46 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destina
     }
 }
 
+global int const XSize = 16;
+global int const YSize = 9;
+
+u32 GetTileValue(int TileMap[YSize][XSize], int X, int Y)
+{
+    u32 Result;
+    Result = TileMap[Y][X] == 1 ? 0xFFFFFFFF : 0xFF008335;
+    return Result;
+}
+
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
 {
-    int Speed = 5;
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
     for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex) 
     {
         game_controller_input *Controller = &(Input->Controllers[ControllerIndex]);
 
-        int HorizontalSpeed = 0;
+        int HorizontalDirection = 0;
         if (Controller->MoveLeft.IsDown) 
         {
-            HorizontalSpeed = -1 * Speed;
+            HorizontalDirection = -1;
         }
         if (Controller->MoveRight.IsDown)
         {
-            HorizontalSpeed = 1 * Speed;
+            HorizontalDirection = 1;
         }
-        int VerticalSpeed = 0;
+        int VerticalDirection = 0;
         if (Controller->MoveUp.IsDown) 
         {
-            VerticalSpeed = -1 * Speed;
+            VerticalDirection = -1;
         }
         if (Controller->MoveDown.IsDown) 
         {
-            VerticalSpeed = 1 * Speed;
+            VerticalDirection = 1;
         }
-        v2 NewPlayerP = V2(GameState->PlayerP.x + HorizontalSpeed, GameState->PlayerP.y + VerticalSpeed);
+        u8 Speed = 5;
+        v2 NewPlayerP = V2(
+            GameState->PlayerP.x + Speed * HorizontalDirection, 
+            GameState->PlayerP.y + Speed * VerticalDirection
+        );
         GameState->PlayerP = NewPlayerP;
 
         real32 AverageY = Controller->StickAverageY;
@@ -93,8 +106,6 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     v2 ScreenSize = Buffer->Dimensions;
     DrawRectangle(Buffer, Origin, ScreenSize, 0xFF000FF); // Clear the Buffer to weird magenta
 
-    int const XSize = 16;
-    int const YSize = 9;
     local_persist int TileMap[YSize][XSize] = 
     {
         { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
@@ -114,7 +125,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     {
         for (int X = 0; X < XSize; ++X) 
         {
-            u32 TileValue = TileMap[Y][X] == 1 ? 0xFFFFFFFF : 0xFF008335;
+            u32 TileValue = GetTileValue(TileMap, X, Y);
 
             int OriginX = X * TileWidth;
             int OriginY = Y * TileHeight;
