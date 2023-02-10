@@ -230,14 +230,27 @@ internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, deb
             SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
         }
         else if (IsDown && KeyCode == SDLK_l)
-        {
-            ++Recording->ActionIndex;
-            if (Recording->ActionIndex > 2)
+        {   
+            switch (Recording->Action)
+            {
+                case record_action::Idle: 
+                {
+                    Recording->Action = record_action::Recording;
+                } break;
+                case record_action::Recording: 
+                {
+                    Recording->Action = record_action::Playing;
+                } break;
+                case record_action::Playing: 
+                {
+                    Recording->Action = record_action::Idle;
+                } break;
+            }
+            if (Recording->Action == Idle) 
             {
                 DebugEndRecordInput(Recording);
                 DebugEndPlaybackInput(Recording);
-            
-                Recording->ActionIndex = 0;
+
                 // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
                 for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
                 {
@@ -726,11 +739,11 @@ int main(int argc, char *argv[])
         HandleControllerEvents(OldInput, NewInput);
 
 #if HITMAN_INTERNAL
-        if (InputRecorder.ActionIndex == 1) 
+        if (InputRecorder.Action == record_action::Recording) 
         {
             DebugRecordInput(&InputRecorder, NewInput, &GameMemory);
         } 
-        if (InputRecorder.ActionIndex == 2)
+        if (InputRecorder.Action == record_action::Playing)
         {
             DebugEndRecordInput(&InputRecorder);   
             DebugPlaybackInput(&InputRecorder, NewInput, &GameMemory);

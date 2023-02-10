@@ -3,9 +3,15 @@
 
 #include "../hitman.h"
 
+enum record_action {
+    Idle,
+    Recording,
+    Playing
+};
+
 struct debug_input_recording
 {
-    u8 ActionIndex;
+    record_action Action;
 
     FILE *RecordHandle;
     FILE *PlaybackHandle;
