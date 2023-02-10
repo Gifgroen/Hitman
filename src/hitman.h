@@ -37,6 +37,8 @@ struct game_memory
     
     u64 TransientStorageSize;
     void *TransientStorage;
+
+    bool IsInitialised;
 };
 
 struct game_button_state 

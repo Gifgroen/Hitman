@@ -66,6 +66,15 @@ u32 GetTileValue(int TileMap[YSize][XSize], int X, int Y)
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
 {
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
+
+    if (!GameMemory->IsInitialised) 
+    {
+        // TODO: further setup of GameState.
+        GameState->PlayerP = V2(64, 64);
+
+        GameMemory->IsInitialised = true;
+    }
+    
     for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex) 
     {
         game_controller_input *Controller = &(Input->Controllers[ControllerIndex]);
