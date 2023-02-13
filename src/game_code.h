@@ -3,7 +3,7 @@
 
 #include "hitman.h"
 
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*, int);
+typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*);
 typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
 
 struct game_code

@@ -63,7 +63,20 @@ u32 GetTileValue(int TileMap[YSize][XSize], int X, int Y)
     return Result;
 }
 
-extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input, int ToneHz) 
+global int TileMap[YSize][XSize] = 
+{
+    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
+    { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+    { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
+    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
+};
+
+extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input) 
 {
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
 
@@ -115,38 +128,29 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     v2 ScreenSize = Buffer->Dimensions;
     DrawRectangle(Buffer, Origin, ScreenSize, 0xFF000FF); // Clear the Buffer to weird magenta
 
-    local_persist int TileMap[YSize][XSize] = 
-    {
-        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
-        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-        { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
-        { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
-        { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
-        { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-        { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-        { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-        { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
-    };
-
     int TileWidth = 64;
     int TileHeight = 64;
+
+    real32 DrawXOffset = (ScreenSize.width - (XSize * TileWidth)) * 0.5f;
+    real32 DrawYOffset = (ScreenSize.height - (YSize * TileHeight)) * 0.5f;
+
     for (int Y = 0; Y < YSize; ++Y) 
     {
         for (int X = 0; X < XSize; ++X) 
         {
             u32 TileValue = GetTileValue(TileMap, X, Y);
 
-            int OriginX = X * TileWidth;
-            int OriginY = Y * TileHeight;
+            int OriginX = DrawXOffset + X * TileWidth;
+            int OriginY = DrawYOffset + Y * TileHeight;
             v2 Origin = V2(OriginX, OriginY);
             v2 Destination = V2(OriginX + TileWidth, OriginY + TileHeight);
             DrawRectangle(Buffer, Origin, Destination, TileValue);
         }
     }
 
-    v2 PlayerP = GameState->PlayerP;
-    v2 PlayerDest = V2(PlayerP.x + 32, PlayerP.y + 50);
-    DrawRectangle(Buffer, PlayerP, PlayerDest, 0xFF0000FF);
+    v2 PlayerOrigin = V2(DrawXOffset + GameState->PlayerP.x, DrawYOffset + GameState->PlayerP.y);
+    v2 PlayerDest = V2(PlayerOrigin.x + 32, PlayerOrigin.y + 50);
+    DrawRectangle(Buffer, PlayerOrigin, PlayerDest, 0xFF0000FF);
 }
 
 extern "C" void GameGetSoundSamples(game_memory *GameMemory, game_sound_output_buffer *SoundBuffer) 

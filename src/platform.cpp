@@ -762,7 +762,7 @@ int main(int argc, char *argv[])
         Buffer.BytesPerPixel = OffscreenBuffer.BytesPerPixel;
         Buffer.Pitch = OffscreenBuffer.Pitch;
 
-        GameCode.GameUpdateAndRender(&Buffer, &GameMemory, NewInput, SoundOutput.ToneHz);
+        GameCode.GameUpdateAndRender(&Buffer, &GameMemory, NewInput);
 
         // REGION: Write Audio to Ringbuffer
 
