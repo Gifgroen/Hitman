@@ -417,7 +417,7 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
 
             if(SDL_GameControllerGetButton(ControllerHandles[ControllerIndex], SDL_CONTROLLER_BUTTON_DPAD_UP))
             {
-                NewController->StickAverageY = 1.0f;
+                NewController->StickAverageY = -1.0f;
                 NewController->IsAnalog = false;
             }
 
@@ -429,7 +429,7 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
 
             if(SDL_GameControllerGetButton(ControllerHandles[ControllerIndex], SDL_CONTROLLER_BUTTON_DPAD_DOWN))
             {
-                NewController->StickAverageY = -1.0f;
+                NewController->StickAverageY = 1.0f;
                 NewController->IsAnalog = false;
             }
 
@@ -441,9 +441,9 @@ internal void HandleControllerEvents(game_input *OldInput, game_input *NewInput)
 
             // emulated Stick average for D-pad movement usage
             real32 Threshold = 0.5f;
-            SDLProcessGameControllerButton(&(OldController->MoveUp), &(NewController->MoveUp), NewController->StickAverageY < -Threshold);
+            SDLProcessGameControllerButton(&(OldController->MoveUp), &(NewController->MoveUp), NewController->StickAverageY > Threshold);
             SDLProcessGameControllerButton(&(OldController->MoveRight), &(NewController->MoveRight), NewController->StickAverageX > Threshold);
-            SDLProcessGameControllerButton(&(OldController->MoveDown), &(NewController->MoveDown), NewController->StickAverageY > Threshold);
+            SDLProcessGameControllerButton(&(OldController->MoveDown), &(NewController->MoveDown), NewController->StickAverageY < -Threshold);
             SDLProcessGameControllerButton(&(OldController->MoveLeft), &(NewController->MoveLeft), NewController->StickAverageX < -Threshold);
         }
     }
