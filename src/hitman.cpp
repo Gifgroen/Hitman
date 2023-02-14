@@ -37,11 +37,8 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destina
 
     int Width = Destination.x - Origin.x;
     int Height = Destination.y - Origin.y;
-    Assert(Width > 0);
-    Assert(Height > 0);
 
     v2 Dim = Buffer->Dimensions;
-
     u32 *Pixels = (u32 *)Buffer->Pixels + Origin.x + (Origin.y * Dim.width);
     for (int Y = 0; Y < Height; ++Y) 
     {
@@ -53,27 +50,47 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destina
     }
 }
 
-global int const XSize = 16;
+global int const XSize = 17;
 global int const YSize = 9;
+
+v2 GetTileMapPosition(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels)
+{
+    v2 Result = V2(
+        Point.x / TileSideInPixels,
+        Point.y / TileSideInPixels
+    );
+    return Result;
+}
 
 u32 GetTileValue(int TileMap[YSize][XSize], int X, int Y)
 {
     u32 Result;
-    Result = TileMap[Y][X] == 1 ? 0xFFFFFFFF : 0xFF008335;
+    Result = TileMap[Y][X];
+    return Result;
+}
+
+bool CheckTileWalkable(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels)
+{   
+    v2 MapPosition = GetTileMapPosition(TileMap, Point, TileSideInPixels);
+    bool Result = Point.x > 0
+        && MapPosition.x < XSize
+        && Point.y > 0
+        && MapPosition.y < YSize
+        && GetTileValue(TileMap, MapPosition.x, MapPosition.y) == 0;
     return Result;
 }
 
 global int TileMap[YSize][XSize] = 
 {
-    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
-    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
-    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1 },
-    { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
-    { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-    { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1 },
-    { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
+    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 },
+    { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input) 
@@ -88,6 +105,9 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         GameMemory->IsInitialised = true;
     }
     
+    int TileSideInPixels = 64;
+    v2 PlayerSize = V2(0.5 * (real32)TileSideInPixels, 0.75 * (real32)TileSideInPixels);
+
     for (int ControllerIndex = 0; ControllerIndex < MAX_CONTROLLER_COUNT; ++ControllerIndex) 
     {
         game_controller_input *Controller = &(Input->Controllers[ControllerIndex]);
@@ -110,12 +130,24 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         {
             VerticalDirection = 1;
         }
+        v2 NewPlayerP = GameState->PlayerP;
         u8 Speed = 5;
-        v2 NewPlayerP = V2(
-            GameState->PlayerP.x + Speed * HorizontalDirection, 
-            GameState->PlayerP.y + Speed * VerticalDirection
+        NewPlayerP.x += Speed * HorizontalDirection;
+        NewPlayerP.y += Speed * VerticalDirection;
+
+        int HalfWidth = (0.5f * PlayerSize.width);
+        v2 PlayerFeet = V2(
+            NewPlayerP.x + HalfWidth,
+            NewPlayerP.y + PlayerSize.height
         );
-        GameState->PlayerP = NewPlayerP;
+        if (
+            CheckTileWalkable(TileMap, V2(PlayerFeet.x - HalfWidth, PlayerFeet.y), TileSideInPixels)
+            && CheckTileWalkable(TileMap, PlayerFeet, TileSideInPixels)
+            && CheckTileWalkable(TileMap, V2(PlayerFeet.x + HalfWidth, PlayerFeet.y), TileSideInPixels)
+        ) 
+        {
+            GameState->PlayerP = NewPlayerP;
+        }
 
         real32 AverageY = Controller->StickAverageY;
         if (AverageY != 0)
@@ -128,28 +160,38 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     v2 ScreenSize = Buffer->Dimensions;
     DrawRectangle(Buffer, Origin, ScreenSize, 0xFF000FF); // Clear the Buffer to weird magenta
 
-    int TileWidth = 64;
-    int TileHeight = 64;
+    real32 DrawXOffset = (ScreenSize.width - (XSize * TileSideInPixels)) * 0.5f;
+    real32 DrawYOffset = (ScreenSize.height - (YSize * TileSideInPixels)) * 0.5f;
 
-    real32 DrawXOffset = (ScreenSize.width - (XSize * TileWidth)) * 0.5f;
-    real32 DrawYOffset = (ScreenSize.height - (YSize * TileHeight)) * 0.5f;
+    v2 PlayerP = GameState->PlayerP;
+    int HalfWidth = (0.5f * PlayerSize.width);
+    v2 Point = V2(PlayerP.x + HalfWidth, PlayerP.y + PlayerSize.height);
+    v2 PlayerFeet = GetTileMapPosition(TileMap, Point, TileSideInPixels);
 
     for (int Y = 0; Y < YSize; ++Y) 
     {
         for (int X = 0; X < XSize; ++X) 
         {
-            u32 TileValue = GetTileValue(TileMap, X, Y);
+            u32 TileColor = 0;
+            if (X == PlayerFeet.x && Y == PlayerFeet.y) 
+            {
+                TileColor = 0xFFFF0000;
+            } 
+            else 
+            {
+                TileColor = GetTileValue(TileMap, X, Y) == 1 ? 0xFFFFFFFF : 0xFF008335;
+            }
 
-            int OriginX = DrawXOffset + X * TileWidth;
-            int OriginY = DrawYOffset + Y * TileHeight;
+            int OriginX = DrawXOffset + X * TileSideInPixels;
+            int OriginY = DrawYOffset + Y * TileSideInPixels;
             v2 Origin = V2(OriginX, OriginY);
-            v2 Destination = V2(OriginX + TileWidth, OriginY + TileHeight);
-            DrawRectangle(Buffer, Origin, Destination, TileValue);
+            v2 Destination = V2(OriginX + TileSideInPixels, OriginY + TileSideInPixels);
+            DrawRectangle(Buffer, Origin, Destination, TileColor);
         }
     }
 
     v2 PlayerOrigin = V2(DrawXOffset + GameState->PlayerP.x, DrawYOffset + GameState->PlayerP.y);
-    v2 PlayerDest = V2(PlayerOrigin.x + 32, PlayerOrigin.y + 50);
+    v2 PlayerDest = V2(PlayerOrigin.x + PlayerSize.width, PlayerOrigin.y + PlayerSize.height);
     DrawRectangle(Buffer, PlayerOrigin, PlayerDest, 0xFF0000FF);
 }
 
