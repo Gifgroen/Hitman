@@ -1,6 +1,10 @@
 #ifndef PLATFORM_DEBUG_IO_H
 #define PLATFORM_DEBUG_IO_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
 #include "../hitman_types.h"
 
 struct debug_read_file_result

@@ -36,7 +36,7 @@ internal debug_read_file_result DebugReadEntireFile(char const *Filename)
 
 internal bool DebugWriteEntireFile(char const *Filename, char const *Content, u64 Length) 
 {
-    FILE * File = fopen (Filename, "w");
+    FILE * File = fopen(Filename, "w");
     if (File == NULL) 
     {
         return false;

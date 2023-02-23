@@ -1,9 +1,8 @@
 #ifndef HITMAN_H
 #define HITMAN_H
 
-#include <stdio.h>
-
 #include "hitman_types.h"
+#include "platform/debug_io.h"
 
 #define MAX_CONTROLLER_COUNT 5
 
@@ -30,6 +29,8 @@ struct game_sound_output_buffer
     s16 *Samples;
 };
 
+typedef debug_read_file_result (* DebugReadEntireFile_t)(char const *Filename);
+
 struct game_memory 
 {
     u64 PermanentStorageSize;
@@ -39,6 +40,8 @@ struct game_memory
     void *TransientStorage;
 
     bool IsInitialised;
+
+    DebugReadEntireFile_t DebugReadEntireFile;
 };
 
 struct game_button_state 

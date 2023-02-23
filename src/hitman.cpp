@@ -93,6 +93,22 @@ global int TileMap[YSize][XSize] =
     { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
+struct png_signature {
+    u8 Data[8];
+
+    /* 
+    According to PNG spec: https://www.w3.org/TR/2003/REC-PNG-20031110/#11Chunks
+
+    Series of chunks:
+    - 4 byte (unsigned), chunk LENGTH
+    - 4 byte, chunk TYPE: each byte corresponds to:
+        - 65-90, [A-Z]
+        - 97-122, [a-z]
+    - LENGTH byte
+    - 4 byte CRC
+    */
+};
+
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input) 
 {
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
@@ -101,6 +117,11 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     {
         // TODO: further setup of GameState.
         GameState->PlayerP = V2(64, 64);
+
+        char const *Path = "../data/floor.png";
+        debug_read_file_result Result = GameMemory->DebugReadEntireFile(Path);
+
+        png_signature *Signature = (png_signature *)Result.Content;
 
         GameMemory->IsInitialised = true;
     }

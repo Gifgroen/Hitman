@@ -687,6 +687,7 @@ int main(int argc, char *argv[])
     GameMemory.PermanentStorageSize = MegaByte(64);
     GameMemory.TransientStorageSize = GigaByte(1);
     GameMemory.IsInitialised = false;
+    GameMemory.DebugReadEntireFile = DebugReadEntireFile;
 
     debug_input_recording InputRecorder = {};
 
