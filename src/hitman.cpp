@@ -115,6 +115,11 @@ uint32_t reverse_bytes(uint32_t bytes)
     return aux;
 }
 
+const char IHDR_TYPE[4] = { 'I', 'H', 'D', 'R' };
+const char PLTE_TYPE[4] = { 'P', 'L', 'T', 'E' };
+const char IDAT_TYPE[4] = { 'I', 'D', 'A', 'T' };
+const char IEND_TYPE[4] = { 'I', 'E', 'N', 'D' };
+
 internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
 {
     debug_read_file_result FileResult = GameMemory->DebugReadEntireFile(Path);
@@ -148,7 +153,28 @@ internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char co
         {
             Type[i] = Chunk->Type[i];
         }
-        printf("Chunk->Length (reversed): %d, Chunk->Type: %4s\n", Length, Type);
+
+        if (memcmp(Type, IHDR_TYPE, 4) == 0) 
+        {
+            printf("Found a IHDR of size %d\n", Length);
+        }
+        else if (memcmp(Type, PLTE_TYPE, 4) == 0) 
+        {
+            printf("Found a PLTE of size %d\n", Length);
+        }
+        else if (memcmp(Type, IDAT_TYPE, 4) == 0) 
+        {
+            printf("Found a IDAT of size %d\n", Length);
+        }
+        else if (memcmp(Type, IEND_TYPE, 4) == 0) 
+        {
+            printf("Found a IEND of size %d\n", Length);
+            break;
+        }
+        else 
+        {
+            printf("Unsupported Chunk Type, Length = %d, Type = %4s\n", Length, Type);
+        }
         
         Diff += (4 + 4 + Length + 4);
     } while(Diff < ContentSize);
@@ -166,8 +192,14 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         // TODO: further setup of GameState.
         GameState->PlayerP = V2(64, 64);
 
-        char const *Path = "../data/floor.png";
-        DebugLoadTextureFromPNG(GameMemory, Path);
+        printf("=== Floor ===\n");
+        char const *FloorPath = "../data/floor.png";
+        DebugLoadTextureFromPNG(GameMemory, FloorPath);
+
+        printf("=== Spiderman ===\n");
+
+        char const *SpidermanPath = "../data/spiderman.png";
+        DebugLoadTextureFromPNG(GameMemory, SpidermanPath);
 
         GameMemory->IsInitialised = true;
     }
