@@ -93,21 +93,69 @@ global int TileMap[YSize][XSize] =
     { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
-struct png_signature {
-    u8 Data[8];
+#include <string.h>
 
-    /* 
-    According to PNG spec: https://www.w3.org/TR/2003/REC-PNG-20031110/#11Chunks
-
-    Series of chunks:
-    - 4 byte (unsigned), chunk LENGTH
-    - 4 byte, chunk TYPE: each byte corresponds to:
-        - 65-90, [A-Z]
-        - 97-122, [a-z]
-    - LENGTH byte
-    - 4 byte CRC
-    */
+struct loaded_texture 
+{
+    v2 Size;
+    void *Pixels;
 };
+
+uint32_t reverse_bytes(uint32_t bytes)
+{
+    uint32_t aux = 0;
+    uint8_t byte;
+    int i;
+
+    for(i = 0; i < 32; i += 8)
+    {
+        byte = (bytes >> i) & 0xff;
+        aux |= byte << (32 - 8 - i);
+    }
+    return aux;
+}
+
+internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
+{
+    debug_read_file_result FileResult = GameMemory->DebugReadEntireFile(Path);
+    png_stream *Stream = (png_stream *)FileResult.Content;
+
+    loaded_texture Result = {};
+
+    u32 const SignatureSize = sizeof(Stream->Signature);
+
+    unsigned char Signature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
+    if (memcmp((char *)Stream->Signature, Signature, SignatureSize) != 0) 
+    {
+        // File has no PNG signature.
+        Result.Size = V2(0, 0);
+        Result.Pixels = NULL;
+        return Result;
+    }
+
+    u8 *Chunks = (u8 *)Stream + SignatureSize;
+
+    u32 Diff = 0;
+    u32 ContentSize = FileResult.ContentSize - SignatureSize;
+    do 
+    {
+        png_chunk *Chunk = (png_chunk *)(Chunks + Diff);
+
+        u32 Length = reverse_bytes(Chunk->Length);
+
+        char Type[4];
+        for (int i = 0; i < 4; ++i)
+        {
+            Type[i] = Chunk->Type[i];
+        }
+        printf("Chunk->Length (reversed): %d, Chunk->Type: %4s\n", Length, Type);
+        
+        Diff += (4 + 4 + Length + 4);
+    } while(Diff < ContentSize);
+
+    // printf("sizeof signature: %d\n", Diff);
+    return Result;
+}
 
 extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *GameMemory, game_input *Input) 
 {
@@ -119,9 +167,7 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
         GameState->PlayerP = V2(64, 64);
 
         char const *Path = "../data/floor.png";
-        debug_read_file_result Result = GameMemory->DebugReadEntireFile(Path);
-
-        png_signature *Signature = (png_signature *)Result.Content;
+        DebugLoadTextureFromPNG(GameMemory, Path);
 
         GameMemory->IsInitialised = true;
     }

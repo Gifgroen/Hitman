@@ -31,6 +31,30 @@ struct game_sound_output_buffer
 
 typedef debug_read_file_result (* DebugReadEntireFile_t)(char const *Filename);
 
+#pragma pack(push, 1)
+struct png_chunk 
+{
+    u32 Length;
+    char Type[4];
+    void *Data;
+    /* 
+    According to PNG spec: https://www.w3.org/TR/2003/REC-PNG-20031110/#11Chunks
+
+    - 4 byte (unsigned), chunk LENGTH
+    - 4 byte, chunk TYPE: each byte corresponds to:
+        - 65-90, [A-Z]
+        - 97-122, [a-z]
+    - LENGTH byte
+    - 4 byte CRC
+    */
+};
+struct png_stream
+{
+    u8 Signature[8];
+    void *Chunks;
+};
+#pragma pack(pop)
+
 struct game_memory 
 {
     u64 PermanentStorageSize;
