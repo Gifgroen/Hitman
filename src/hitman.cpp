@@ -1,6 +1,7 @@
 #include "hitman.h"
 
-#include <math.h> // Userd for sinf, will be removed in the future.
+#include <math.h> // Used for sinf, will be removed in the future  with Intrinsics.
+#include <string.h> // Used for memcmp, will be removed in the future  with Intrinsics
 
 void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)
 {
@@ -93,8 +94,6 @@ global int TileMap[YSize][XSize] =
     { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
-#include <string.h>
-
 struct loaded_texture 
 {
     v2 Size;
@@ -115,10 +114,27 @@ uint32_t reverse_bytes(uint32_t bytes)
     return aux;
 }
 
-const char IHDR_TYPE[4] = { 'I', 'H', 'D', 'R' };
-const char PLTE_TYPE[4] = { 'P', 'L', 'T', 'E' };
-const char IDAT_TYPE[4] = { 'I', 'D', 'A', 'T' };
-const char IEND_TYPE[4] = { 'I', 'E', 'N', 'D' };
+u32 const SignatureSize = 8;
+unsigned char const Signature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
+
+char const IHDR_TYPE[4] = { 'I', 'H', 'D', 'R' };
+char const PLTE_TYPE[4] = { 'P', 'L', 'T', 'E' };
+char const IDAT_TYPE[4] = { 'I', 'D', 'A', 'T' };
+char const IEND_TYPE[4] = { 'I', 'E', 'N', 'D' };
+
+#pragma pack(push, 1)
+struct png_header 
+{
+    u32 Width;
+    u32 Height;
+
+    u8 BitDepth;	
+    u8 ColourType;
+    u8 CompressionMethod;
+    u8 FilterMethod;
+    u8 InterlaceMethod;
+};
+#pragma pack(pop)
 
 internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
 {
@@ -126,10 +142,7 @@ internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char co
     png_stream *Stream = (png_stream *)FileResult.Content;
 
     loaded_texture Result = {};
-
-    u32 const SignatureSize = sizeof(Stream->Signature);
-
-    unsigned char Signature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
+    
     if (memcmp((char *)Stream->Signature, Signature, SignatureSize) != 0) 
     {
         // File has no PNG signature.
@@ -147,39 +160,38 @@ internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char co
         png_chunk *Chunk = (png_chunk *)(Chunks + Diff);
 
         u32 Length = reverse_bytes(Chunk->Length);
-
-        char Type[4];
-        for (int i = 0; i < 4; ++i)
-        {
-            Type[i] = Chunk->Type[i];
-        }
+        char *Type = Chunk->Type;
+        void *Data = &Chunk->Data;
 
         if (memcmp(Type, IHDR_TYPE, 4) == 0) 
         {
             printf("Found a IHDR of size %d\n", Length);
+            png_header *Header = (png_header *)&Chunk->Data;
+            printf("Size = %d\n", reverse_bytes(Header->Width));
+            printf("Size = %d\n", reverse_bytes(Header->Height));
+            printf("ColourType = %d\n", Header->ColourType);
         }
-        else if (memcmp(Type, PLTE_TYPE, 4) == 0) 
+        else if (memcmp(Chunk->Type, PLTE_TYPE, 4) == 0) 
         {
             printf("Found a PLTE of size %d\n", Length);
         }
-        else if (memcmp(Type, IDAT_TYPE, 4) == 0) 
+        else if (memcmp(Chunk->Type, IDAT_TYPE, 4) == 0) 
         {
             printf("Found a IDAT of size %d\n", Length);
         }
-        else if (memcmp(Type, IEND_TYPE, 4) == 0) 
+        else if (memcmp(Chunk->Type, IEND_TYPE, 4) == 0) 
         {
             printf("Found a IEND of size %d\n", Length);
             break;
         }
         else 
         {
-            printf("Unsupported Chunk Type, Length = %d, Type = %4s\n", Length, Type);
+            printf("Unsupported Chunk Type = %.*s, Length = %d\n", 4, Chunk->Type, Length);
         }
         
         Diff += (4 + 4 + Length + 4);
     } while(Diff < ContentSize);
 
-    // printf("sizeof signature: %d\n", Diff);
     return Result;
 }
 

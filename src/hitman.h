@@ -44,7 +44,7 @@ struct png_chunk
     - 4 byte, chunk TYPE: each byte corresponds to:
         - 65-90, [A-Z]
         - 97-122, [a-z]
-    - LENGTH byte
+    - chunk LENGTH bytes of data
     - 4 byte CRC
     */
 };
