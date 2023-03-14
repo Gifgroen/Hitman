@@ -114,13 +114,8 @@ uint32_t reverse_bytes(uint32_t bytes)
     return aux;
 }
 
-u32 const SignatureSize = 8;
-unsigned char const Signature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
-
-char const IHDR_TYPE[4] = { 'I', 'H', 'D', 'R' };
-char const PLTE_TYPE[4] = { 'P', 'L', 'T', 'E' };
-char const IDAT_TYPE[4] = { 'I', 'D', 'A', 'T' };
-char const IEND_TYPE[4] = { 'I', 'E', 'N', 'D' };
+u8 const SignatureSize = 8;
+unsigned char const MagicSignature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
 
 #pragma pack(push, 1)
 struct png_header 
@@ -136,61 +131,52 @@ struct png_header
 };
 #pragma pack(pop)
 
+#define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
+
 internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
 {
+    // Read the file contents into a png_stream.
     debug_read_file_result FileResult = GameMemory->DebugReadEntireFile(Path);
     png_stream *Stream = (png_stream *)FileResult.Content;
-
-    loaded_texture Result = {};
     
-    if (memcmp((char *)Stream->Signature, Signature, SignatureSize) != 0) 
+    if (memcmp(Stream->Signature, MagicSignature, SignatureSize) != 0)
     {
         // File has no PNG signature.
+        loaded_texture Result = {};
         Result.Size = V2(0, 0);
         Result.Pixels = NULL;
         return Result;
     }
 
+    // Process the chunk Stream
     u8 *Chunks = (u8 *)Stream + SignatureSize;
 
     u32 Diff = 0;
     u32 ContentSize = FileResult.ContentSize - SignatureSize;
+
+    png_chunk *ExtractedChunks[8] = {};
+    u8 Count = 0;
     do 
     {
-        png_chunk *Chunk = (png_chunk *)(Chunks + Diff);
+        Assert(Count < ArrayCount(ExtractedChunks));
 
+        png_chunk *Chunk = (png_chunk *)(Chunks + Diff);       
         u32 Length = reverse_bytes(Chunk->Length);
-        char *Type = Chunk->Type;
-        void *Data = &Chunk->Data;
 
-        if (memcmp(Type, IHDR_TYPE, 4) == 0) 
-        {
-            printf("Found a IHDR of size %d\n", Length);
-            png_header *Header = (png_header *)&Chunk->Data;
-            printf("Size = %d\n", reverse_bytes(Header->Width));
-            printf("Size = %d\n", reverse_bytes(Header->Height));
-            printf("ColourType = %d\n", Header->ColourType);
-        }
-        else if (memcmp(Chunk->Type, PLTE_TYPE, 4) == 0) 
-        {
-            printf("Found a PLTE of size %d\n", Length);
-        }
-        else if (memcmp(Chunk->Type, IDAT_TYPE, 4) == 0) 
-        {
-            printf("Found a IDAT of size %d\n", Length);
-        }
-        else if (memcmp(Chunk->Type, IEND_TYPE, 4) == 0) 
-        {
-            printf("Found a IEND of size %d\n", Length);
-            break;
-        }
-        else 
-        {
-            printf("Unsupported Chunk Type = %.*s, Length = %d\n", 4, Chunk->Type, Length);
-        }
-        
+        ExtractedChunks[Count++] = Chunk;
+
         Diff += (4 + 4 + Length + 4);
     } while(Diff < ContentSize);
+
+    // convert to Result
+    loaded_texture Result = {};
+
+    for (u8 ChunkCount = 0; ChunkCount < Count; ++ChunkCount)
+    {
+        png_chunk *Chunk = ExtractedChunks[ChunkCount];
+        // TODO: process the chunks into a loaded_texture
+        printf("Found chunks: type = %.*s, Length = %d\n", 4, Chunk->Type, reverse_bytes(Chunk->Length));
+    }
 
     return Result;
 }
