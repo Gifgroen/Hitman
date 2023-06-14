@@ -65,3 +65,55 @@ internal void DebugEndPlaybackInput(debug_input_recording *InputRecorder)
         InputRecorder->PlaybackHandle = NULL;
     }
 }
+
+// Platform Event handling
+#if HITMAN_INTERNAL // Debug Input handling
+internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController)
+{
+    SDL_Keycode KeyCode = Event.keysym.sym;
+
+    bool IsDown = (Event.state == SDL_PRESSED);
+
+    if (Event.repeat == 0) 
+    {
+        u32 mod = Event.keysym.mod;
+        if (IsDown && (KeyCode == SDLK_RETURN && (mod & KMOD_CTRL)))
+        {
+            u32 FullscreenFlag = SDL_WINDOW_FULLSCREEN;
+            bool IsFullscreen = SDL_GetWindowFlags(Setup->Window) & FullscreenFlag;
+            SDL_SetWindowFullscreen(Setup->Window, IsFullscreen ? 0 : FullscreenFlag);
+        }
+        else if (IsDown && KeyCode == SDLK_l)
+        {   
+            switch (Recording->Action)
+            {
+                case record_action::Idle: 
+                {
+                    Recording->Action = record_action::Recording;
+                } break;
+                case record_action::Recording: 
+                {
+                    Recording->Action = record_action::Playing;
+                } break;
+                case record_action::Playing: 
+                {
+                    Recording->Action = record_action::Idle;
+                } break;
+            }
+            if (Recording->Action == Idle) 
+            {
+                DebugEndRecordInput(Recording);
+                DebugEndPlaybackInput(Recording);
+
+                // Note(Karsten): Need a more structured way to detect reset of looped input, so we can reset keyboard.
+                for (int ButtonIndex = 0; ButtonIndex < ArrayCount(KeyboardController->Buttons); ++ButtonIndex)
+                {
+                    game_button_state *Btn = &(KeyboardController->Buttons[ButtonIndex]);
+                    Btn->IsDown = false;
+                    Btn->HalfTransitionCount = 0;
+                }
+            }
+        }
+    }
+}
+#endif

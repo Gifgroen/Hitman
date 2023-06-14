@@ -1,7 +1,7 @@
 #ifndef HITMAN_H
 #define HITMAN_H
 
-#include "hitman_types.h"
+#include "types.h"
 #include "platform/debug_io.h"
 
 #define MAX_CONTROLLER_COUNT 5
@@ -20,6 +20,8 @@ struct game_state
     v2 PlayerP;
 
     int ToneHz;
+
+    bool Running;
 };
 
 struct game_sound_output_buffer

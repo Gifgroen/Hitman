@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-#include "../hitman_types.h"
+#include "../types.h"
 
 struct debug_read_file_result
 {

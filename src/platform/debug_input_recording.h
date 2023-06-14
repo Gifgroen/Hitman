@@ -2,6 +2,7 @@
 #define DEBUG_INPUT_RECORDING_H
 
 #include "../hitman.h"
+#include "os_window.h"
 
 enum record_action {
     Idle,
@@ -32,5 +33,9 @@ internal void DebugBeginPlaybackInput(debug_input_recording *InputRecorder, game
 internal void DebugPlaybackInput(debug_input_recording *InputRecorder, game_input *NewInput, game_memory *GameMemory);
 
 internal void DebugEndPlaybackInput(debug_input_recording *InputRecorder);
+
+#if HITMAN_INTERNAL // Debug Input handling
+internal void DebugHandleKeyEvent(SDL_KeyboardEvent Event, sdl_setup *Setup, debug_input_recording *Recording, game_controller_input *KeyboardController);
+#endif
 
 #endif

@@ -3,7 +3,9 @@
 
 #include "../hitman.h"
 #include "../platform.h"
-#include "../hitman_types.h"
+#include "../types.h"
+
+#include "audio.h"
 
 internal void SDLDebugDrawVertical(game_offscreen_buffer *Buffer, int Value, int Top, int Bottom, u32 Color);
 
