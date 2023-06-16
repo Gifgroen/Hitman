@@ -3,6 +3,9 @@
 #include <math.h> // Used for sinf, will be removed in the future  with Intrinsics.
 #include <string.h> // Used for memcmp, will be removed in the future  with Intrinsics
 
+#include "lodepng.h"
+#include "lodepng.c"
+
 void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)
 {
     local_persist real32 tSine;
@@ -31,6 +34,34 @@ void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameStat
     }
 }
 
+struct loaded_texture 
+{
+    v2 Size;
+    void *Pixels;
+};
+
+internal void DrawTexture(game_offscreen_buffer *Buffer, v2 Origin, loaded_texture *Texture)
+{
+    Assert(Origin.x < Origin.x + Texture->Size.width);
+    Assert(Origin.y < Origin.y + Texture->Size.height);
+
+    int Width = Texture->Size.width;
+    int Height = Texture->Size.height;
+
+    v2 Dim = Buffer->Dimensions;
+    u32 *Pixels = (u32 *)Buffer->Pixels + Origin.x + (Origin.y * Dim.width);
+
+    u32* TexturePixels = (u32*)Texture->Pixels;
+    for (int Y = 0; Y < Height; ++Y) 
+    {
+        for (int X = 0; X < Width; ++X)
+        {
+            *Pixels++ = *(u32*)(TexturePixels + Y * X);
+        }
+        Pixels += (Dim.width - Width);
+    }
+}
+
 internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destination, u32 TileValue)
 {
     Assert(Origin.x < Destination.x);
@@ -53,6 +84,21 @@ internal void DrawRectangle(game_offscreen_buffer *Buffer, v2 Origin, v2 Destina
 
 global int const XSize = 17;
 global int const YSize = 9;
+
+global int TileMap[YSize][XSize] = 
+{
+    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+    { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 },
+    { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
+    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
+};
+
+
 
 v2 GetTileMapPosition(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels)
 {
@@ -80,25 +126,6 @@ bool CheckTileWalkable(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels
         && GetTileValue(TileMap, MapPosition.x, MapPosition.y) == 0;
     return Result;
 }
-
-global int TileMap[YSize][XSize] = 
-{
-    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 },
-    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
-    { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
-    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
-    { 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 },
-    { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
-    { 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
-    { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1 },
-    { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
-};
-
-struct loaded_texture 
-{
-    v2 Size;
-    void *Pixels;
-};
 
 uint32_t reverse_bytes(uint32_t bytes)
 {
@@ -135,48 +162,26 @@ struct png_header
 
 internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
 {
-    // Read the file contents into a png_stream.
-    debug_read_file_result FileResult = GameMemory->DebugReadEntireFile(Path);
-    png_stream *Stream = (png_stream *)FileResult.Content;
-    
-    if (memcmp(Stream->Signature, MagicSignature, SignatureSize) != 0)
+    loaded_texture Result = {};
+
+    u8 Error;
+    u8* Image = 0;
+    unsigned int Width, Height;
+
+    Error = lodepng_decode32_file(&Image, &Width, &Height, Path);
+    if (Error) 
     {
-        // File has no PNG signature.
-        loaded_texture Result = {};
+        printf("error %u: %s\n", Error, lodepng_error_text(Error));
         Result.Size = V2(0, 0);
         Result.Pixels = NULL;
         return Result;
     }
 
-    // Process the chunk Stream
-    u8 *Chunks = (u8 *)Stream + SignatureSize;
+    Result.Size = V2(Width, Height);
 
-    u32 Diff = 0;
-    u32 ContentSize = FileResult.ContentSize - SignatureSize;
+    Result.Pixels = Image;
 
-    png_chunk *ExtractedChunks[8] = {};
-    u8 Count = 0;
-    do 
-    {
-        Assert(Count < ArrayCount(ExtractedChunks));
-
-        png_chunk *Chunk = (png_chunk *)(Chunks + Diff);       
-        u32 Length = reverse_bytes(Chunk->Length);
-
-        ExtractedChunks[Count++] = Chunk;
-
-        Diff += (4 + 4 + Length + 4);
-    } while(Diff < ContentSize);
-
-    // convert to Result
-    loaded_texture Result = {};
-
-    for (u8 ChunkCount = 0; ChunkCount < Count; ++ChunkCount)
-    {
-        png_chunk *Chunk = ExtractedChunks[ChunkCount];
-        // TODO: process the chunks into a loaded_texture
-        printf("Found chunks: type = %.*s, Length = %d\n", 4, Chunk->Type, reverse_bytes(Chunk->Length));
-    }
+    free(Image);
 
     return Result;
 }
@@ -185,23 +190,34 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
 {
     game_state *GameState = (game_state *)GameMemory->PermanentStorage;
 
+    loaded_texture FloorTexture;
+    loaded_texture SpidermanTexture;
+
     if (!GameMemory->IsInitialised) 
     {
         // TODO: further setup of GameState.
         GameState->PlayerP = V2(64, 64);
 
-        printf("=== Floor ===\n");
-        char const *FloorPath = "../data/floor.png";
-        DebugLoadTextureFromPNG(GameMemory, FloorPath);
+        // printf("=== Floor ===\n");
+        // char const *FloorPath = "../data/floor.png";
+        // FloorTexture = DebugLoadTextureFromPNG(GameMemory, FloorPath);
+        // printf("size = (%d, %d)\n", FloorTexture.Size.width, FloorTexture.Size.height);
 
         printf("=== Spiderman ===\n");
-
         char const *SpidermanPath = "../data/spiderman.png";
-        DebugLoadTextureFromPNG(GameMemory, SpidermanPath);
+        SpidermanTexture = DebugLoadTextureFromPNG(GameMemory, SpidermanPath);
+        printf("size = (%d, %d)\n", SpidermanTexture.Size.width, SpidermanTexture.Size.height);
 
         GameMemory->IsInitialised = true;
     }
-    
+
+
+    // TODO:  store and don't load EVERY FRAME
+    // printf("=== Floor ===\n");
+    char const *FloorPath = "../data/floor.png";
+    FloorTexture = DebugLoadTextureFromPNG(GameMemory, FloorPath);
+    // printf("size = (%d, %d)\n", FloorTexture.Size.width, FloorTexture.Size.height);
+
     int TileSideInPixels = 64;
     v2 PlayerSize = V2(0.5 * (real32)TileSideInPixels, 0.75 * (real32)TileSideInPixels);
 
@@ -265,10 +281,11 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
     v2 Point = V2(PlayerP.x + HalfWidth, PlayerP.y + PlayerSize.height);
     v2 PlayerFeet = GetTileMapPosition(TileMap, Point, TileSideInPixels);
 
-    for (int Y = 0; Y < YSize; ++Y) 
+    for (unsigned int Y = 0; Y < YSize; ++Y) 
     {
-        for (int X = 0; X < XSize; ++X) 
+        for (unsigned int X = 0; X < XSize; ++X) 
         {
+            u32 TileValue = GetTileValue(TileMap, X, Y);
             u32 TileColor = 0;
             if (X == PlayerFeet.x && Y == PlayerFeet.y) 
             {
@@ -276,14 +293,21 @@ extern "C" void GameUpdateAndRender(game_offscreen_buffer *Buffer, game_memory *
             } 
             else 
             {
-                TileColor = GetTileValue(TileMap, X, Y) == 1 ? 0xFFFFFFFF : 0xFF008335;
+                TileColor = TileValue == 1 ? 0xFFFFFFFF : 0xFF008335;
             }
 
             int OriginX = DrawXOffset + X * TileSideInPixels;
             int OriginY = DrawYOffset + Y * TileSideInPixels;
             v2 Origin = V2(OriginX, OriginY);
-            v2 Destination = V2(OriginX + TileSideInPixels, OriginY + TileSideInPixels);
-            DrawRectangle(Buffer, Origin, Destination, TileColor);
+
+            if (TileValue == 1)
+            {
+                v2 Destination = V2(OriginX + TileSideInPixels, OriginY + TileSideInPixels);
+                DrawRectangle(Buffer, Origin, Destination, TileColor);
+            } else 
+            {
+                DrawTexture(Buffer, Origin, &FloorTexture);
+            }
         }
     }
 
