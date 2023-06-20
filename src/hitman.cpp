@@ -98,14 +98,9 @@ global int TileMap[YSize][XSize] =
     { 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1 }
 };
 
-
-
 v2 GetTileMapPosition(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels)
 {
-    v2 Result = V2(
-        Point.x / TileSideInPixels,
-        Point.y / TileSideInPixels
-    );
+    v2 Result = V2(Point.x / TileSideInPixels, Point.y / TileSideInPixels);
     return Result;
 }
 
@@ -126,39 +121,6 @@ bool CheckTileWalkable(int TileMap[YSize][XSize], v2 Point, int TileSideInPixels
         && GetTileValue(TileMap, MapPosition.x, MapPosition.y) == 0;
     return Result;
 }
-
-uint32_t reverse_bytes(uint32_t bytes)
-{
-    uint32_t aux = 0;
-    uint8_t byte;
-    int i;
-
-    for(i = 0; i < 32; i += 8)
-    {
-        byte = (bytes >> i) & 0xff;
-        aux |= byte << (32 - 8 - i);
-    }
-    return aux;
-}
-
-u8 const SignatureSize = 8;
-unsigned char const MagicSignature[SignatureSize] = {137, 80, 78, 71, 13, 10, 26, 10};
-
-#pragma pack(push, 1)
-struct png_header 
-{
-    u32 Width;
-    u32 Height;
-
-    u8 BitDepth;	
-    u8 ColourType;
-    u8 CompressionMethod;
-    u8 FilterMethod;
-    u8 InterlaceMethod;
-};
-#pragma pack(pop)
-
-#define ArrayCount(Array) (sizeof(Array)/sizeof(*(Array)))
 
 internal loaded_texture DebugLoadTextureFromPNG(game_memory *GameMemory, char const *Path)
 {
