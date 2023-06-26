@@ -79,11 +79,7 @@ internal void TryWaitForNextFrame(u64 LastCounter, real64 TargetSecondsPerFrame)
 // Close
 internal void CloseGame(game_code *GameCode, sdl_setup *Setup, game_memory *GameMemory) 
 {
-    if (GameCode->LibHandle) 
-    {
-        dlclose(GameCode->LibHandle);
-        GameCode->LibHandle = NULL;
-    }
+    UnloadGameCode(GameCode);
 
     if (Setup->WindowTexture) 
     {

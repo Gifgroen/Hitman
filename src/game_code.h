@@ -3,8 +3,11 @@
 
 #include "hitman.h"
 
-typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*);
-typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
+extern "C" 
+{
+    typedef void (*GameUpdateAndRender_t)(game_offscreen_buffer*, game_memory *, game_input*);
+    typedef void (*GameGetSoundSamples_t)(game_memory *, game_sound_output_buffer*);
+}
 
 struct game_code
 {
@@ -15,5 +18,12 @@ struct game_code
     GameUpdateAndRender_t GameUpdateAndRender;
     GameGetSoundSamples_t GameGetSoundSamples;
 };
+
+ 
+internal s64 GameCodeChanged(game_code *GameCode);
+
+internal int LoadGameCode(game_code *GameCode);
+
+internal void UnloadGameCode(game_code *GameCode);
 
 #endif // GAME_CODE_H

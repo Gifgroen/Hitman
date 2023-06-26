@@ -3,7 +3,6 @@
 #include <math.h> // Used for sinf, will be removed in the future  with Intrinsics.
 #include <string.h> // Used for memcmp, will be removed in the future  with Intrinsics
 
-#include "lodepng.h"
 #include "lodepng.c"
 
 void GameOutputSound(game_sound_output_buffer *SoundBuffer, game_state *GameState)

@@ -46,3 +46,12 @@ internal int LoadGameCode(game_code *GameCode)
 
     return 0;
 }
+
+internal void UnloadGameCode(game_code *GameCode) 
+{
+    if (GameCode->LibHandle) 
+    {
+        dlclose(GameCode->LibHandle);
+        GameCode->LibHandle = NULL;
+    }
+}
